@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
+import argparse
 import os
 import re
 import sys
@@ -257,7 +258,7 @@ def api(cmd, uid, session_id = '', extras = ''):
     return json.loads(http_req(url, headers = header_api))
 
 
-def fast_d1ck(uname, pwd, login_type, save = True):
+def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
     if uname[-2] == ':':
         print('Error: sub account can not upgrade')
         os._exit(3)
@@ -292,10 +293,12 @@ def fast_d1ck(uname, pwd, login_type, save = True):
     _dial_account = _['dial_account']
 
     _script_mtime = os.stat(os.path.realpath(__file__)).st_mtime
-    if not os.path.exists(shell_file) or os.stat(shell_file).st_mtime < _script_mtime:
-        make_wget_script(dt['userID'], pwd, _dial_account, _payload)
-    if not os.path.exists(ipk_file) or os.stat(ipk_file).st_mtime < _script_mtime:
-        update_ipk()
+    if gen_sh:
+        if not os.path.exists(shell_file) or os.stat(shell_file).st_mtime < _script_mtime:
+            make_wget_script(dt['userID'], pwd, _dial_account, _payload)
+    if gen_ipk:
+        if not os.path.exists(ipk_file) or os.stat(ipk_file).st_mtime < _script_mtime:
+            update_ipk()
 
     print("To Upgrade: ", end = '')
     uprint('%s%s ' % ( _['province_name'], _['sp_name']),
@@ -561,6 +564,14 @@ if __name__ == '__main__':
         save_encrypted = True
         login_type = TYPE_NORMAL_ACCOUNT
 
+        # Arguments
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--no-sh', dest='gen_sh', action='store_false',
+                            help='skip script generation')
+        parser.add_argument('--no-ipk', dest='gen_ipk', action='store_false',
+                            help='skip ipk generation')
+        args = parser.parse_args()
+
         # Load credentials
         if os.path.exists(account_file_plain):
             with open(account_file_plain) as f:
@@ -581,7 +592,9 @@ if __name__ == '__main__':
             pwd_md5 = hashlib.md5(pwd).hexdigest()
 
         # Routine
-        fast_d1ck(uid, pwd_md5, login_type, save=save_encrypted)
+        fast_d1ck(uid, pwd_md5, login_type,
+                  save=save_encrypted,
+                  gen_sh=args.gen_sh, gen_ipk=args.gen_ipk)
     except NoCredentialsError:
         print('Please use XUNLEI_UID=<uid>/XUNLEI_PASSWD=<pass> envrionment varibles or create config file "%s", input account splitting with comma(,). Eg:\nyonghuming,mima' % account_file_plain)
     except KeyboardInterrupt:
