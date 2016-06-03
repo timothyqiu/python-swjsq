@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
-import argparse
+import getopt
 import os
 import re
 import sys
@@ -557,6 +557,50 @@ Description:  Xunlei Fast Dick
     ipk_fobj.close()
 
 
+class Arguments(object):
+    def __init__(self):
+        self.gen_sh = True
+        self.gen_ipk = True
+
+
+def show_usage():
+    options = [
+        ('-h, --help', 'show this help message and exit'),
+        ('--no-sh', 'skip script generation'),
+        ('--no-ipk', 'skip ipk generation'),
+    ]
+
+    print('usage: {} [OPTIONS]'.format(sys.argv[0]))
+    print()
+    print('options:')
+    for opt, description in options:
+        print('  {}\t{}'.format(opt, description))
+
+
+def parse_args():
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'h', ['help', 'no-sh', 'no-ipk'])
+    except getopt.GetoptError as err:
+        print(err)
+        show_usage()
+        sys.exit(2)
+
+    args = Arguments()
+
+    for o, a in opts:
+        if o in ('-h', '--help'):
+            show_usage()
+            sys.exit()
+        elif o == '--no-sh':
+            args.gen_sh = False
+        elif o == '--no-ipk':
+            args.gen_ipk = False
+        else:
+            assert False, 'Unhandled option'
+
+    return args
+
+
 if __name__ == '__main__':
     setup()
     try:
@@ -565,12 +609,7 @@ if __name__ == '__main__':
         login_type = TYPE_NORMAL_ACCOUNT
 
         # Arguments
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--no-sh', dest='gen_sh', action='store_false',
-                            help='skip script generation')
-        parser.add_argument('--no-ipk', dest='gen_ipk', action='store_false',
-                            help='skip ipk generation')
-        args = parser.parse_args()
+        args = parse_args()
 
         # Load credentials
         if os.path.exists(account_file_plain):
