@@ -36,6 +36,11 @@ account_file_plain = 'swjsq.account.txt'
 shell_file = 'swjsq_wget.sh'
 ipk_file = 'swjsq_0.0.1_all.ipk'
 
+
+class NoCredentialsError(RuntimeError):
+    pass
+
+
 try:
     from Crypto.PublicKey import RSA
 except ImportError:
@@ -552,19 +557,32 @@ Description:  Xunlei Fast Dick
 if __name__ == '__main__':
     setup()
     try:
+        # Option defaults
+        save_encrypted = True
+        login_type = TYPE_NORMAL_ACCOUNT
+
+        # Load credentials
         if os.path.exists(account_file_plain):
-            uid, pwd = open(account_file_plain).read().strip().split(',')
+            with open(account_file_plain) as f:
+                uid, pwd = f.read().strip().split(',')
             if PY3K:
                 pwd = pwd.encode('utf-8')
-            fast_d1ck(uid, hashlib.md5(pwd).hexdigest(), TYPE_NORMAL_ACCOUNT)
+            pwd_md5 = hashlib.md5(pwd).hexdigest()
         elif os.path.exists(account_file_encrypted):
-            uid, pwd_md5 = open(account_file_encrypted).read().strip().split(',')
-            fast_d1ck(uid, pwd_md5, TYPE_NUM_ACCOUNT, save = False)
-        elif 'XUNLEI_UID' in os.environ and 'XUNLEI_PASSWD' in os.environ:
-            uid = os.environ['XUNLEI_UID']
-            pwd = os.environ['XUNLEI_PASSWD']
-            fast_d1ck(uid, hashlib.md5(pwd).hexdigest(), TYPE_NORMAL_ACCOUNT)
+            with open(account_file_encrypted) as f:
+                uid, pwd_md5 = f.read().strip().split(',')
+            save_encrypted = False
+            login_type = TYPE_NUM_ACCOUNT
         else:
-            print('Please use XUNLEI_UID=<uid>/XUNLEI_PASSWD=<pass> envrionment varibles or create config file "%s", input account splitting with comma(,). Eg:\nyonghuming,mima' % account_file_plain)
+            uid = os.getenv('XUNLEI_UID')
+            pwd = os.getenv('XUNLEI_PASSWD')
+            if not uid or not pwd:
+                raise NoCredentialsError()
+            pwd_md5 = hashlib.md5(pwd).hexdigest()
+
+        # Routine
+        fast_d1ck(uid, pwd_md5, login_type, save=save_encrypted)
+    except NoCredentialsError:
+        print('Please use XUNLEI_UID=<uid>/XUNLEI_PASSWD=<pass> envrionment varibles or create config file "%s", input account splitting with comma(,). Eg:\nyonghuming,mima' % account_file_plain)
     except KeyboardInterrupt:
         pass
