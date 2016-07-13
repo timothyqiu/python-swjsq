@@ -53,20 +53,6 @@
 10. 重启，稍等几分钟，ssh到路由，使用ps命令查看swjsq是否正常启动，或者在路由器`系统进程`界面查找是否存在`{swjsq} /bin/ash /bin/swjsq`进程；检查提速是否成功。
 11. 升级路由器固件后，需要重新设置自启动，swjsq一般不需要重新设置，请注意备份swjsq文件。
 
-# Docker
-
-* 下载最新 docker image
-
-```
-docker pull flier/xunlei-fastdick
-```
-
-* 指定环境变量作为启动参数
-
-```
-docker run -d --name=xunlei-fastdick --restart=unless-stopped -e XUNLEI_UID=<uid> -e XUNLEI_PASSWD=<uid> flier/xunlei-fastdick
-```
-
 # 说明
 * 生成的`swjsq_wget.sh`和`swjsq_0.0.1_all.ipk`包含了账户信息，请不要共享给他人使用
 * 明文存储的密码将会在第一次登陆成功后保存为数字ID和密码的MD5，明文文件将会删除。如果需要更换账号，只需新建一个 __swjsq.account.txt__，并重新运行python脚本
