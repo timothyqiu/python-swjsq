@@ -12,7 +12,7 @@ import tarfile
 import ssl
 import atexit
 
-#xunlei use self-signed certificate; on py2.7.9+
+# xunlei use self-signed certificate; on py2.7.9+
 if hasattr(ssl, '_create_unverified_context') and hasattr(ssl, '_create_default_https_context'):
     ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -45,7 +45,7 @@ class NoCredentialsError(RuntimeError):
 try:
     from Crypto.PublicKey import RSA
 except ImportError:
-    #slow rsa
+    # slow rsa
     print('Warning: pycrypto not found, use pure-python implemention')
     rsa_result = {}
 
@@ -79,7 +79,7 @@ except ImportError:
     @cached
     def rsa_encode(data):
         result = modpow(str_to_int(data), rsa_pubexp, rsa_mod)
-        return "{0:0256X}".format(result) # length should be 1024bit, hard coded here
+        return "{0:0256X}".format(result)  # length should be 1024bit, hard coded here
 else:
     cipher = RSA.construct((rsa_mod, rsa_pubexp))
 
@@ -179,17 +179,17 @@ def http_req(url, headers = {}, body = None, encoding = 'utf-8'):
 
 def login_xunlei(uname, pwd_md5, login_type = TYPE_NORMAL_ACCOUNT):
     pwd = rsa_encode(pwd_md5)
-    fake_device_id = hashlib.md5(("%s23333" % pwd_md5).encode('utf-8')).hexdigest() # just generate a 32bit string
+    fake_device_id = hashlib.md5(("%s23333" % pwd_md5).encode('utf-8')).hexdigest()  # just generate a 32bit string
     # sign = div.10?.device_id + md5(sha1(packageName + businessType + md5(a protocolVersion specific GUID)))
     device_sign = "div100.%s%s" % (fake_device_id, hashlib.md5(
         hashlib.sha1(("%scom.xunlei.vip.swjsq68700d1872b772946a6940e4b51827e8af" % fake_device_id).encode('utf-8'))
             .hexdigest().encode('utf-8')
      ).hexdigest())
     _payload = json.dumps({
-            "protocolVersion": PROTOCOL_VERSION,# 109
+            "protocolVersion": PROTOCOL_VERSION,  # 109
             "sequenceNo": 1000001,
             "platformVersion": 1,
-            "sdkVersion": 177550,# 177600
+            "sdkVersion": 177550,  # 177600
             "peerID": MAC,
             "businessType": 68,
             "clientVersion": APP_VERSION,
@@ -272,13 +272,13 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
         print(dt)
         os._exit(1)
     elif ('isVip' not in dt or not dt['isVip']) and ('payId' not in dt or dt['payId'] not in  [5, 702]):
-        #FIX ME: rewrite if with payId
+        # FIX ME: rewrite if with payId
         print('Warning: you are probably not xunlei vip, buy buy buy!\n[Debug] isVip:%s payId:%s payName:%s' % (
           'None' if 'isVip' not in dt else dt['isVip'],
           'None' if 'payId' not in dt else dt['payId'],
           'None' if 'payName' not in dt else [dt['payName']]
         ))
-        #os._exit(2)
+        # os._exit(2)
     print('Login xunlei succeeded')
     if save:
         try:
@@ -315,7 +315,7 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
             _['max_bandwidth']['upstream']/1024,
     ))
 
-    #print(_)
+    # print(_)
     def _atexit_func():
         print("Sending recover request")
         try:
@@ -332,13 +332,13 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
             if i == 100:
                 dt, _payload = login_xunlei(uname, pwd, login_type)
                 i = 18
-            if i % 18 == 0:#3h
+            if i % 18 == 0:  # 3h
                 print('Initializing upgrade')
-                if i:# not first time
+                if i:  # not first time
                     api('recover', dt['userID'], dt['sessionID'], extras = "dial_account=%s" % _dial_account)
                     time.sleep(5)
                 _ = api('upgrade', dt['userID'], dt['sessionID'], extras = "user_type=1&dial_account=%s" % _dial_account)
-                #print(_)
+                # print(_)
                 if not _['errno']:
                     print('Upgrade done: Down %dM, Up %dM' % (_['bandwidth']['downstream'], _['bandwidth']['upstream']))
                     i = 0
@@ -350,14 +350,14 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
                 _ = api('keepalive', dt['userID'], dt['sessionID'])
             if _['errno']:
                 print('Error %s: %s' % (_['errno'], _['message']))
-                if _['errno'] == 513:# TEST: re-upgrade when get 'not exist channel'
+                if _['errno'] == 513:  # TEST: re-upgrade when get 'not exist channel'
                     i = 100
                     continue
                 elif _['errno'] == 812:
                     print('Already upgraded, continuing')
                     i = 0
                 else:
-                    time.sleep(300)#os._exit(4)
+                    time.sleep(300)  # os._exit(4)
         except Exception as ex:
             import traceback
             _ = traceback.format_exc()
@@ -368,7 +368,7 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
             except UnicodeEncodeError:
                 f.write('%s keepalive\n' % (time.strftime('%X', time.localtime(time.time()))))
         i += 1
-        time.sleep(590)#10 min
+        time.sleep(590)  # 10 min
 
 
 def make_wget_script(uid, pwd, dial_account, _payload):
