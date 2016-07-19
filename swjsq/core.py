@@ -111,7 +111,7 @@ header_api = {
 }
 
 
-def get_mac(nic = '', to_splt = ':'):
+def get_mac(nic='', to_splt=':'):
     if os.name == 'nt':
         cmd = 'ipconfig /all'
         splt = '-'
@@ -145,11 +145,11 @@ def long2hex(l):
     return hex(l)[2:].upper().rstrip('L')
 
 
-def uprint(s, fallback = None, end = None):
+def uprint(s, fallback=None, end=None):
     global UNICODE_WARNING_SHOWN
     while True:
         try:
-            print(s, end = end)
+            print(s, end=end)
         except UnicodeEncodeError:
             if UNICODE_WARNING_SHOWN:
                 print('Warning: locale of your system may not be utf8 compatible, output will be truncated')
@@ -157,27 +157,27 @@ def uprint(s, fallback = None, end = None):
         else:
             break
         try:
-            print(s.encode('utf-8'), end = end)
+            print(s.encode('utf-8'), end=end)
         except UnicodeEncodeError:
             if fallback:
-                print(fallback, end = end)
+                print(fallback, end=end)
         break
 
 
-def http_req(url, headers = {}, body = None, encoding = 'utf-8'):
+def http_req(url, headers={}, body=None, encoding='utf-8'):
     req = urllib2.Request(url)
     for k in headers:
         req.add_header(k, headers[k])
     if sys.version.startswith('3') and isinstance(body, str):
-        body = bytes(body, encoding = 'ascii')
-    resp = urllib2.urlopen(req, data = body)
+        body = bytes(body, encoding='ascii')
+    resp = urllib2.urlopen(req, data=body)
     ret = resp.read().decode(encoding)
     if sys.version.startswith('3') and isinstance(ret, bytes):
         ret = str(ret)
     return ret
 
 
-def login_xunlei(uname, pwd_md5, login_type = TYPE_NORMAL_ACCOUNT):
+def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT):
     pwd = rsa_encode(pwd_md5)
     fake_device_id = hashlib.md5(("%s23333" % pwd_md5).encode('utf-8')).hexdigest()  # just generate a 32bit string
     # sign = div.10?.device_id + md5(sha1(packageName + businessType + md5(a protocolVersion specific GUID)))
@@ -209,7 +209,7 @@ def login_xunlei(uname, pwd_md5, login_type = TYPE_NORMAL_ACCOUNT):
             },
             "extensionList": ""
     })
-    ct = http_req('https://login.mobile.reg2t.sandai.net:443/', body = _payload, headers = header_xl, encoding = 'gbk')
+    ct = http_req('https://login.mobile.reg2t.sandai.net:443/', body=_payload, headers=header_xl, encoding='gbk')
     return json.loads(ct), _payload
 
 
@@ -226,7 +226,7 @@ def renew_xunlei(uid, session):
         "userID": uid,
         "sessionID": session
     })
-    ct = http_req('https://login.mobile.reg2t.sandai.net:443/', body = _payload, headers = header_xl, encoding = 'gbk')
+    ct = http_req('https://login.mobile.reg2t.sandai.net:443/', body=_payload, headers=header_xl, encoding='gbk')
     return json.loads(ct), _payload
 
 
@@ -241,11 +241,11 @@ def api_url():
 def setup():
     global MAC
     global API_URL
-    MAC = get_mac(to_splt = '').upper() + '004V'
+    MAC = get_mac(to_splt='').upper() + '004V'
     API_URL = api_url()
 
 
-def api(cmd, uid, session_id = '', extras = ''):
+def api(cmd, uid, session_id='', extras=''):
     # missing dial_account, (userid), os
     url = 'http://%s/v2/%s?%sclient_type=android-swjsq-%s&peerid=%s&time_and=%d&client_version=androidswjsq-%s&userid=%s&os=android-5.0.1.23SmallRice%s' % (
             API_URL,
@@ -258,7 +258,7 @@ def api(cmd, uid, session_id = '', extras = ''):
             uid,
             ('&%s' % extras) if extras else '',
     )
-    return json.loads(http_req(url, headers = header_api))
+    return json.loads(http_req(url, headers=header_api))
 
 
 def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
@@ -303,10 +303,10 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
         if not os.path.exists(ipk_file) or os.stat(ipk_file).st_mtime < _script_mtime:
             update_ipk()
 
-    print("To Upgrade: ", end = '')
+    print("To Upgrade: ", end='')
     uprint('%s%s ' % ( _['province_name'], _['sp_name']),
             '%s %s ' % ( _['province'], _['sp']),
-            end = ''
+            end=''
           )
     print('Down %dM -> %dM, Up %dM -> %dM' % (
             _['bandwidth']['downstream']/1024,
@@ -319,7 +319,7 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
     def _atexit_func():
         print("Sending recover request")
         try:
-            api('recover', dt['userID'], dt['sessionID'], extras = "dial_account=%s" % _dial_account)
+            api('recover', dt['userID'], dt['sessionID'], extras="dial_account=%s" % _dial_account)
         except KeyboardInterrupt:
             print('Secondary ctrl+c pressed, exiting')
     atexit.register(_atexit_func)
@@ -335,9 +335,9 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
             if i % 18 == 0:  # 3h
                 print('Initializing upgrade')
                 if i:  # not first time
-                    api('recover', dt['userID'], dt['sessionID'], extras = "dial_account=%s" % _dial_account)
+                    api('recover', dt['userID'], dt['sessionID'], extras="dial_account=%s" % _dial_account)
                     time.sleep(5)
-                _ = api('upgrade', dt['userID'], dt['sessionID'], extras = "user_type=1&dial_account=%s" % _dial_account)
+                _ = api('upgrade', dt['userID'], dt['sessionID'], extras="user_type=1&dial_account=%s" % _dial_account)
                 # print(_)
                 if not _['errno']:
                     print('Upgrade done: Down %dM, Up %dM' % (_['bandwidth']['downstream'], _['bandwidth']['upstream']))
@@ -483,7 +483,7 @@ done
 
 
 def update_ipk():
-    def _sio(s = None):
+    def _sio(s=None):
         if not s:
             return sio()
         if PY3K:
@@ -498,8 +498,8 @@ def update_ipk():
         fobj.seek(pos)
         return _
 
-    def add_to_tar(tar, name, sio_obj, perm = 420):
-        info = tarfile.TarInfo(name = name)
+    def add_to_tar(tar, name, sio_obj, perm=420):
+        info = tarfile.TarInfo(name=name)
         info.size = flen(sio_obj)
         info.mode = perm
         sio_obj.seek(0)
@@ -507,13 +507,13 @@ def update_ipk():
 
     if os.path.exists(ipk_file):
         os.remove(ipk_file)
-    ipk_fobj = tarfile.open(name = ipk_file, mode = 'w:gz')
+    ipk_fobj = tarfile.open(name=ipk_file, mode='w:gz')
 
     data_stream = sio()
-    data_fobj = tarfile.open(fileobj = data_stream, mode = 'w:gz')
+    data_fobj = tarfile.open(fileobj=data_stream, mode='w:gz')
     # /usr/bin/swjsq
     data_content = open(shell_file, 'rb')
-    add_to_tar(data_fobj, './bin/swjsq', data_content, perm = 511)
+    add_to_tar(data_fobj, './bin/swjsq', data_content, perm=511)
     # /etc/init.d/swjsq
     data_content = _sio('''#!/bin/sh /etc/rc.common
 START=90
@@ -530,14 +530,14 @@ start_service()
     procd_close_instance
 }
 ''')
-    add_to_tar(data_fobj, './etc/init.d/swjsq', data_content, perm = 511)
+    add_to_tar(data_fobj, './etc/init.d/swjsq', data_content, perm=511)
     # wrap up
     data_fobj.close()
     add_to_tar(ipk_fobj, './data.tar.gz', data_stream)
     data_stream.close()
 
     control_stream = sio()
-    control_fobj = tarfile.open(fileobj = control_stream, mode = 'w:gz')
+    control_fobj = tarfile.open(fileobj=control_stream, mode='w:gz')
     control_content = _sio('''Package: swjsq
 Version: 0.0.1
 Depends: libc
