@@ -449,7 +449,7 @@ while true; do
     fi
 
     sleep 1
-	day_of_month_orig=`date +%d`
+    day_of_month_orig=`date +%d`
     day_of_month=`echo $day_of_month_orig|grep -oE "[1-9]{1,2}"`
     if [[ -z $orig_day_of_month || $day_of_month -ne $orig_day_of_month ]]; then
        orig_day_of_month=$day_of_month
@@ -522,12 +522,12 @@ USE_PROCD=1
 
 start_service()
 {
-	procd_open_instance
-	procd_set_param respawn ${respawn_threshold:-3600} ${respawn_timeout:-5} ${respawn_retry:-5}
-	procd_set_param command /bin/swjsq
-	procd_set_param stdout 1
-	procd_set_param stderr 1
-	procd_close_instance
+    procd_open_instance
+    procd_set_param respawn ${respawn_threshold:-3600} ${respawn_timeout:-5} ${respawn_retry:-5}
+    procd_set_param command /bin/swjsq
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_close_instance
 }
 ''')
     add_to_tar(data_fobj, './etc/init.d/swjsq', data_content, perm = 511)
