@@ -98,13 +98,13 @@ TYPE_NUM_ACCOUNT = 1
 UNICODE_WARNING_SHOWN = False
 
 header_xl = {
-    'Content-Type':'',
+    'Content-Type': '',
     'Connection': 'Keep-Alive',
     'Accept-Encoding': 'gzip',
     'User-Agent': 'android-async-http/xl-acc-sdk/version-1.6.1.177600'
 }
 header_api = {
-    'Content-Type':'',
+    'Content-Type': '',
     'Connection': 'Keep-Alive',
     'Accept-Encoding': 'gzip',
     'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 5.0.1; SmallRice Build/LRX22C)'
@@ -193,7 +193,7 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT):
             "peerID": MAC,
             "businessType": 68,
             "clientVersion": APP_VERSION,
-            "devicesign":device_sign,
+            "devicesign": device_sign,
             "isCompressed": 0,
             "cmdID": 1,
             "userName": uname,
@@ -271,7 +271,7 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
         uprint('Error: login failed, %s' % dt['errorDesc'], 'Error: login failed')
         print(dt)
         os._exit(1)
-    elif ('isVip' not in dt or not dt['isVip']) and ('payId' not in dt or dt['payId'] not in  [5, 702]):
+    elif ('isVip' not in dt or not dt['isVip']) and ('payId' not in dt or dt['payId'] not in [5, 702]):
         # FIX ME: rewrite if with payId
         print('Warning: you are probably not xunlei vip, buy buy buy!\n[Debug] isVip:%s payId:%s payName:%s' % (
           'None' if 'isVip' not in dt else dt['isVip'],
@@ -304,8 +304,8 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
             update_ipk()
 
     print("To Upgrade: ", end='')
-    uprint('%s%s ' % ( _['province_name'], _['sp_name']),
-            '%s %s ' % ( _['province'], _['sp']),
+    uprint('%s%s ' % (_['province_name'], _['sp_name']),
+            '%s %s ' % (_['province'], _['sp']),
             end=''
           )
     print('Down %dM -> %dM, Up %dM -> %dM' % (
@@ -418,7 +418,7 @@ i=100
 while true; do
     if test $i -ge 100; then
         echo "login xunlei"
-        ret=`$HTTP_REQ https://login.mobile.reg2t.sandai.net:443/ $POST_ARG"'''+_payload.replace('"','\\"')+'''" --header "$UA_XL"`
+        ret=`$HTTP_REQ https://login.mobile.reg2t.sandai.net:443/ $POST_ARG"'''+_payload.replace('"', '\\"')+'''" --header "$UA_XL"`
         session_temp=`echo $ret|grep -oE "sessionID...[A-F,0-9]{32}"`
         session=`echo $session_temp|grep -oE "[A-F,0-9]{32}"`
         uid_temp=`echo $ret|grep -oE "userID..[0-9]{9}"`

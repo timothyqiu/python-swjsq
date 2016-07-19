@@ -5,7 +5,7 @@ from swjsq import __version__
 
 
 with open('README.rst') as f:
-    long_description=f.read()
+    long_description = f.read()
 
 
 url = 'https://github.com/timothyqiu/python-swjsq'
