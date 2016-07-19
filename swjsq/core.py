@@ -182,9 +182,10 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT):
     fake_device_id = hashlib.md5(("%s23333" % pwd_md5).encode('utf-8')).hexdigest()  # just generate a 32bit string
     # sign = div.10?.device_id + md5(sha1(packageName + businessType + md5(a protocolVersion specific GUID)))
     device_sign = "div100.%s%s" % (fake_device_id, hashlib.md5(
-        hashlib.sha1(("%scom.xunlei.vip.swjsq68700d1872b772946a6940e4b51827e8af" % fake_device_id).encode('utf-8'))
-            .hexdigest().encode('utf-8')
-     ).hexdigest())
+        hashlib.sha1(
+            ("%scom.xunlei.vip.swjsq68700d1872b772946a6940e4b51827e8af" % fake_device_id).encode('utf-8')
+        ).hexdigest().encode('utf-8')
+    ).hexdigest())
     _payload = json.dumps({
             "protocolVersion": PROTOCOL_VERSION,  # 109
             "sequenceNo": 1000001,
@@ -305,9 +306,8 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
 
     print("To Upgrade: ", end='')
     uprint('%s%s ' % (_['province_name'], _['sp_name']),
-            '%s %s ' % (_['province'], _['sp']),
-            end=''
-          )
+           '%s %s ' % (_['province'], _['sp']),
+           end='')
     print('Down %dM -> %dM, Up %dM -> %dM' % (
             _['bandwidth']['downstream']/1024,
             _['max_bandwidth']['downstream']/1024,
@@ -358,7 +358,7 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
                     i = 0
                 else:
                     time.sleep(300)  # os._exit(4)
-        except Exception as ex:
+        except Exception:
             import traceback
             _ = traceback.format_exc()
             print(_)
