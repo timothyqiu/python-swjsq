@@ -46,7 +46,7 @@ try:
     from Crypto.PublicKey import RSA
 except ImportError:
     # slow rsa
-    print('Warning: pycrypto not found, use pure-python implemention')
+    print('Warning: pycrypto not found, using pure-python implemention')
     rsa_result = {}
 
     def cached(func):
@@ -152,7 +152,7 @@ def uprint(s, fallback=None, end=None):
             print(s, end=end)
         except UnicodeEncodeError:
             if UNICODE_WARNING_SHOWN:
-                print('Warning: locale of your system may not be utf8 compatible, output will be truncated')
+                print('Warning: locale of your system may not be utf-8 compatible, output will be truncated')
                 UNICODE_WARNING_SHOWN = True
         else:
             break
@@ -315,7 +315,6 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
             _['max_bandwidth']['upstream']/1024,
     ))
 
-    # print(_)
     def _atexit_func():
         print("Sending recover request")
         try:
@@ -641,6 +640,6 @@ def main():
                   save=save_encrypted,
                   gen_sh=args.gen_sh, gen_ipk=args.gen_ipk)
     except NoCredentialsError:
-        print('Please use XUNLEI_UID=<uid>/XUNLEI_PASSWD=<pass> envrionment varibles or create config file "%s", input account splitting with comma(,). Eg:\nyonghuming,mima' % account_file_plain)
+        print('No credentials provided.')
     except KeyboardInterrupt:
         pass
