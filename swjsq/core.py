@@ -1,6 +1,7 @@
-#!/usr/bin/env python
 from __future__ import print_function
+
 import getopt
+import logging
 import os
 import re
 import sys
@@ -11,6 +12,10 @@ import binascii
 import tarfile
 import ssl
 import atexit
+
+
+logger = logging.getLogger(__name__)
+
 
 # xunlei use self-signed certificate; on py2.7.9+
 if hasattr(ssl, '_create_unverified_context') and hasattr(ssl, '_create_default_https_context'):
@@ -46,7 +51,7 @@ try:
     from Crypto.PublicKey import RSA
 except ImportError:
     # slow rsa
-    print('Warning: pycrypto not found, use pure-python implemention')
+    logger.warn('pycrypto not found, using pure-python implemention')
     rsa_result = {}
 
     def cached(func):
@@ -145,25 +150,6 @@ def long2hex(l):
     return hex(l)[2:].upper().rstrip('L')
 
 
-def uprint(s, fallback=None, end=None):
-    global UNICODE_WARNING_SHOWN
-    while True:
-        try:
-            print(s, end=end)
-        except UnicodeEncodeError:
-            if UNICODE_WARNING_SHOWN:
-                print('Warning: locale of your system may not be utf8 compatible, output will be truncated')
-                UNICODE_WARNING_SHOWN = True
-        else:
-            break
-        try:
-            print(s.encode('utf-8'), end=end)
-        except UnicodeEncodeError:
-            if fallback:
-                print(fallback, end=end)
-        break
-
-
 def http_req(url, headers={}, body=None, encoding='utf-8'):
     req = urllib2.Request(url)
     for k in headers:
@@ -234,7 +220,7 @@ def renew_xunlei(uid, session):
 def api_url():
     portal = json.loads(http_req("http://api.portal.swjsq.vip.xunlei.com:81/v2/queryportal"))
     if portal['errno']:
-        print('Error: get interface_ip failed')
+        logger.error('get interface_ip failed')
         os._exit(3)
     return '%s:%s' % (portal['interface_ip'], portal['interface_port'])
 
@@ -264,23 +250,24 @@ def api(cmd, uid, session_id='', extras=''):
 
 def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
     if uname[-2] == ':':
-        print('Error: sub account can not upgrade')
+        logger.error('sub account can not upgrade')
         os._exit(3)
 
     dt, _payload = login_xunlei(uname, pwd, login_type)
     if 'sessionID' not in dt:
-        uprint('Error: login failed, %s' % dt['errorDesc'], 'Error: login failed')
-        print(dt)
+        logger.error('login failed, %s', dt['errorDesc'])
+        logger.debug('%s', dt)
         os._exit(1)
     elif ('isVip' not in dt or not dt['isVip']) and ('payId' not in dt or dt['payId'] not in [5, 702]):
         # FIX ME: rewrite if with payId
-        print('Warning: you are probably not xunlei vip, buy buy buy!\n[Debug] isVip:%s payId:%s payName:%s' % (
+        logger.warn('you are probably not xunlei vip, buy buy buy!')
+        logger.debug('isVip:%s payId:%s payName:%s',
           'None' if 'isVip' not in dt else dt['isVip'],
           'None' if 'payId' not in dt else dt['payId'],
           'None' if 'payName' not in dt else [dt['payName']]
-        ))
+        )
         # os._exit(2)
-    print('Login xunlei succeeded')
+    logger.info('Login xunlei succeeded')
     if save:
         try:
             os.remove(account_file_plain)
@@ -291,7 +278,7 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
 
     _ = api('bandwidth', dt['userID'])
     if not _['can_upgrade']:
-        uprint('Error: can not upgrade, so sad TAT %s' % _['message'], 'Error: can not upgrade, so sad TAT')
+        logger.error('can not upgrade, so sad TAT %s', _['message'])
         os._exit(3)
 
     _dial_account = _['dial_account']
@@ -304,24 +291,21 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
         if not os.path.exists(ipk_file) or os.stat(ipk_file).st_mtime < _script_mtime:
             update_ipk()
 
-    print("To Upgrade: ", end='')
-    uprint('%s%s ' % (_['province_name'], _['sp_name']),
-           '%s %s ' % (_['province'], _['sp']),
-           end='')
-    print('Down %dM -> %dM, Up %dM -> %dM' % (
-            _['bandwidth']['downstream']/1024,
-            _['max_bandwidth']['downstream']/1024,
-            _['bandwidth']['upstream']/1024,
-            _['max_bandwidth']['upstream']/1024,
-    ))
+    logger.info(
+        'To Upgrade: %s%s Down %dM -> %dM, Up %dM -> %dM',
+        _['province_name'], _['sp_name'],
+        _['bandwidth']['downstream']/1024,
+        _['max_bandwidth']['downstream']/1024,
+        _['bandwidth']['upstream']/1024,
+        _['max_bandwidth']['upstream']/1024,
+    )
 
-    # print(_)
     def _atexit_func():
-        print("Sending recover request")
+        logger.info("Sending recover request")
         try:
             api('recover', dt['userID'], dt['sessionID'], extras="dial_account=%s" % _dial_account)
         except KeyboardInterrupt:
-            print('Secondary ctrl+c pressed, exiting')
+            logger.info('Secondary ctrl+c pressed, exiting')
     atexit.register(_atexit_func)
     i = 0
     while True:
@@ -333,14 +317,13 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
                 dt, _payload = login_xunlei(uname, pwd, login_type)
                 i = 18
             if i % 18 == 0:  # 3h
-                print('Initializing upgrade')
+                logger.info('Initializing upgrade')
                 if i:  # not first time
                     api('recover', dt['userID'], dt['sessionID'], extras="dial_account=%s" % _dial_account)
                     time.sleep(5)
                 _ = api('upgrade', dt['userID'], dt['sessionID'], extras="user_type=1&dial_account=%s" % _dial_account)
-                # print(_)
                 if not _['errno']:
-                    print('Upgrade done: Down %dM, Up %dM' % (_['bandwidth']['downstream'], _['bandwidth']['upstream']))
+                    logger.info('Upgrade done: Down %dM, Up %dM', _['bandwidth']['downstream'], _['bandwidth']['upstream'])
                     i = 0
             else:
                 _dt_t, _paylod_t = renew_xunlei(dt['userID'], dt['sessionID'])
@@ -349,24 +332,22 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
                     continue
                 _ = api('keepalive', dt['userID'], dt['sessionID'])
             if _['errno']:
-                print('Error %s: %s' % (_['errno'], _['message']))
+                message = _.get('richmessage')
+                if not message:
+                    message = _.get('message', '(Unknown)')
+                logger.error('%s: %s', _['errno'], message)
                 if _['errno'] == 513:  # TEST: re-upgrade when get 'not exist channel'
                     i = 100
                     continue
                 elif _['errno'] == 812:
-                    print('Already upgraded, continuing')
+                    logger.info('Already upgraded, continuing')
                     i = 0
                 else:
                     time.sleep(300)  # os._exit(4)
         except Exception:
-            import traceback
-            _ = traceback.format_exc()
-            print(_)
-        with open('swjsq.log', 'a') as f:
-            try:
-                f.write('%s %s\n' % (time.strftime('%X', time.localtime(time.time())), _))
-            except UnicodeEncodeError:
-                f.write('%s keepalive\n' % (time.strftime('%X', time.localtime(time.time()))))
+            logger.exception('Unexpected')
+
+        logger.debug('%s', _)
         i += 1
         time.sleep(590)  # 10 min
 
@@ -585,7 +566,8 @@ def show_usage():
 
 def parse_args():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'h', ['help', 'no-sh', 'no-ipk'])
+        long_opts = ['help', 'no-sh', 'no-ipk']
+        opts, args = getopt.getopt(sys.argv[1:], 'h', long_opts)
     except getopt.GetoptError as err:
         print(err)
         show_usage()
@@ -607,7 +589,27 @@ def parse_args():
     return args
 
 
+def setup_logging():
+    fh = logging.FileHandler('swjsq.log')
+    fh.setLevel(logging.DEBUG)
+
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+
+    FMT = '%(asctime)s %(levelname)s %(message)s'
+    DATE_FMT = '%Y-%m-%d %H:%M:%S'
+    formatter = logging.Formatter(FMT, DATE_FMT)
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    logger.setLevel(logging.DEBUG)
+
+
 def main():
+    setup_logging()
     setup()
     try:
         # Option defaults
@@ -641,6 +643,6 @@ def main():
                   save=save_encrypted,
                   gen_sh=args.gen_sh, gen_ipk=args.gen_ipk)
     except NoCredentialsError:
-        print('Please use XUNLEI_UID=<uid>/XUNLEI_PASSWD=<pass> envrionment varibles or create config file "%s", input account splitting with comma(,). Eg:\nyonghuming,mima' % account_file_plain)
+        logger.error('No credentials provided.')
     except KeyboardInterrupt:
         pass
