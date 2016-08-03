@@ -609,15 +609,17 @@ def setup_logging():
 
 
 def main():
-    setup_logging()
-    setup()
     try:
+        # Arguments
+        args = parse_args()
+
+        # Setups
+        setup_logging()
+        setup()
+
         # Option defaults
         save_encrypted = True
         login_type = TYPE_NORMAL_ACCOUNT
-
-        # Arguments
-        args = parse_args()
 
         # Load credentials
         if os.path.exists(account_file_plain):
