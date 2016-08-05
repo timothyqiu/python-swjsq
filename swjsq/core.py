@@ -256,7 +256,7 @@ def api(cmd, uid, session_id='', extras=''):
     response = json.loads(http_req(url, headers=header_api))
 
     errno = response.get('errno')
-    if errno is not None:
+    if errno:
         message = response.get('richmessage')
         if not message:
             message = response.get('message')
