@@ -48,6 +48,13 @@ class NoCredentialsError(RuntimeError):
     pass
 
 
+class APIError(RuntimeError):
+    def __init__(self, command, errno, message):
+        self.command = command
+        self.errno = errno
+        self.message = message
+
+
 try:
     from Crypto.PublicKey import RSA
 except ImportError:
@@ -246,7 +253,16 @@ def api(cmd, uid, session_id='', extras=''):
             uid,
             ('&%s' % extras) if extras else '',
     )
-    return json.loads(http_req(url, headers=header_api))
+    response = json.loads(http_req(url, headers=header_api))
+
+    errno = response.get('errno')
+    if errno is not None:
+        message = response.get('richmessage')
+        if not message:
+            message = response.get('message')
+        raise APIError(cmd, errno, message)
+
+    return response
 
 
 def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
@@ -647,5 +663,8 @@ def main():
                   gen_sh=args.gen_sh, gen_ipk=args.gen_ipk)
     except NoCredentialsError:
         logger.error('No credentials provided.')
+    except APIError as e:
+        logger.error('API Error %s: (%d) %s',
+                     e.command, e.errno, e.message or 'Unknown')
     except KeyboardInterrupt:
         pass
