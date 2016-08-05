@@ -27,6 +27,7 @@ rsa_pubexp = 0x010001
 APP_VERSION = "2.0.3.4"
 PROTOCOL_VERSION = 108
 FALLBACK_MAC = '000000000000'
+FALLBACK_INTERFACE = '119.147.41.210:80'
 
 PY3K = sys.version_info[0] == 3
 if not PY3K:
@@ -220,8 +221,8 @@ def renew_xunlei(uid, session):
 def api_url():
     portal = json.loads(http_req("http://api.portal.swjsq.vip.xunlei.com:81/v2/queryportal"))
     if portal['errno']:
-        logger.error('get interface_ip failed')
-        os._exit(3)
+        logger.error('get interface_ip failed, using fallback address')
+        return FALLBACK_INTERFACE
     return '%s:%s' % (portal['interface_ip'], portal['interface_port'])
 
 
