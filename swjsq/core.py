@@ -162,11 +162,11 @@ def http_req(url, headers={}, body=None, encoding='utf-8'):
     req = urllib2.Request(url)
     for k in headers:
         req.add_header(k, headers[k])
-    if sys.version.startswith('3') and isinstance(body, str):
+    if PY3K and isinstance(body, str):
         body = bytes(body, encoding='ascii')
     resp = urllib2.urlopen(req, data=body)
     ret = resp.read().decode(encoding)
-    if sys.version.startswith('3') and isinstance(ret, bytes):
+    if PY3K and isinstance(ret, bytes):
         ret = str(ret)
     return ret
 
@@ -279,10 +279,7 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
         # FIX ME: rewrite if with payId
         logger.warn('you are probably not xunlei vip, buy buy buy!')
         logger.debug('isVip:%s payId:%s payName:%s',
-          'None' if 'isVip' not in dt else dt['isVip'],
-          'None' if 'payId' not in dt else dt['payId'],
-          'None' if 'payName' not in dt else [dt['payName']]
-        )
+                     dt.get('isVip'), dt.get('payId'), dt.get('payName'))
         # os._exit(2)
     logger.info('Login xunlei succeeded')
     if save:
