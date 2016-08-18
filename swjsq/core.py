@@ -345,25 +345,23 @@ def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
                     i = 100
                     continue
                 _ = api('keepalive', dt['userID'], dt['sessionID'])
-            if _['errno']:
-                message = _.get('richmessage')
-                if not message:
-                    message = _.get('message', '(Unknown)')
-                logger.error('%s: %s', _['errno'], message)
-                if _['errno'] == 513:  # TEST: re-upgrade when get 'not exist channel'
-                    i = 100
-                    continue
-                elif _['errno'] == 812:
-                    logger.info('Already upgraded, continuing')
-                    i = 0
-                else:
-                    time.sleep(300)  # os._exit(4)
+
+            logger.debug('%s', _)
+        except APIError as e:
+            logger.error('APIError %s: (%d) %s', e.command, e.errno, e.message)
+            if e.errno == 513:  # not exist channel: re-upgrade
+                i = 100
+                continue
+            elif e.errno == 812:
+                logger.info('Already upgraded, continuing')
+                i = 0
+            else:
+                time.sleep(300)  # os._exit(4)
         except Exception:
             logger.exception('Unexpected')
 
-        logger.debug('%s', _)
         i += 1
-        time.sleep(590)  # 10 min
+        time.sleep(600)  # 10 min
 
 
 def make_wget_script(uid, pwd, dial_account, _payload):
