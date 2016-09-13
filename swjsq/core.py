@@ -1,10 +1,9 @@
+from __future__ import absolute_import
 from __future__ import print_function
 
-import getopt
 import logging
 import os
 import re
-import sys
 import json
 import time
 import hashlib
@@ -13,6 +12,7 @@ import tarfile
 import ssl
 import atexit
 
+from swjsq._compat import PY3
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,7 @@ PROTOCOL_VERSION = 108
 FALLBACK_MAC = '000000000000'
 FALLBACK_INTERFACE = '119.147.41.210:80'
 
-PY3K = sys.version_info[0] == 3
-if not PY3K:
+if not PY3:
     import urllib2
     from cStringIO import StringIO as sio
     rsa_pubexp = long(rsa_pubexp)
@@ -38,14 +37,8 @@ else:
     import urllib.request as urllib2
     from io import BytesIO as sio
 
-account_file_encrypted = '.swjsq.account'
-account_file_plain = 'swjsq.account.txt'
 shell_file = 'swjsq_wget.sh'
 ipk_file = 'swjsq_0.0.1_all.ipk'
-
-
-class NoCredentialsError(RuntimeError):
-    pass
 
 
 class APIError(RuntimeError):
@@ -97,10 +90,10 @@ else:
     cipher = RSA.construct((rsa_mod, rsa_pubexp))
 
     def rsa_encode(s):
-        if PY3K and isinstance(s, str):
+        if PY3 and isinstance(s, str):
             s = s.encode("utf-8")
         _ = binascii.hexlify(cipher.encrypt(s, None)[0]).upper()
-        if PY3K:
+        if PY3:
             _ = _.decode("utf-8")
         return _
 
@@ -162,11 +155,11 @@ def http_req(url, headers={}, body=None, encoding='utf-8'):
     req = urllib2.Request(url)
     for k in headers:
         req.add_header(k, headers[k])
-    if PY3K and isinstance(body, str):
+    if PY3 and isinstance(body, str):
         body = bytes(body, encoding='ascii')
     resp = urllib2.urlopen(req, data=body)
     ret = resp.read().decode(encoding)
-    if PY3K and isinstance(ret, bytes):
+    if PY3 and isinstance(ret, bytes):
         ret = str(ret)
     return ret
 
@@ -265,7 +258,8 @@ def api(cmd, uid, session_id='', extras=''):
     return response
 
 
-def fast_d1ck(uname, pwd, login_type, save=True, gen_sh=True, gen_ipk=True):
+def fast_d1ck(uname, pwd, login_type, account_file_encrypted, account_file_plain,
+              save=True, gen_sh=True, gen_ipk=True):
     if uname[-2] == ':':
         logger.error('sub account can not upgrade')
         os._exit(3)
@@ -470,7 +464,7 @@ while true; do
     fi
 done
 '''.replace("\r", "")
-        if PY3K:
+        if PY3:
             _ = _.encode("utf-8")
         f.write(_)
 
@@ -479,7 +473,7 @@ def update_ipk():
     def _sio(s=None):
         if not s:
             return sio()
-        if PY3K:
+        if PY3:
             return sio(bytes(s, "ascii"))
         else:
             return sio(s)
@@ -554,112 +548,3 @@ Description:  Xunlei Fast Dick
     debian_binary_stream.close()
 
     ipk_fobj.close()
-
-
-class Arguments(object):
-    def __init__(self):
-        self.gen_sh = True
-        self.gen_ipk = True
-
-
-def show_usage():
-    options = [
-        ('-h, --help', 'show this help message and exit'),
-        ('--no-sh', 'skip script generation'),
-        ('--no-ipk', 'skip ipk generation'),
-    ]
-
-    print('usage: {} [OPTIONS]'.format(sys.argv[0]))
-    print()
-    print('options:')
-    for opt, description in options:
-        print('  {}\t{}'.format(opt, description))
-
-
-def parse_args():
-    try:
-        long_opts = ['help', 'no-sh', 'no-ipk']
-        opts, args = getopt.getopt(sys.argv[1:], 'h', long_opts)
-    except getopt.GetoptError as err:
-        print(err)
-        show_usage()
-        sys.exit(2)
-
-    args = Arguments()
-
-    for o, a in opts:
-        if o in ('-h', '--help'):
-            show_usage()
-            sys.exit()
-        elif o == '--no-sh':
-            args.gen_sh = False
-        elif o == '--no-ipk':
-            args.gen_ipk = False
-        else:
-            assert False, 'Unhandled option'
-
-    return args
-
-
-def setup_logging():
-    fh = logging.FileHandler('swjsq.log')
-    fh.setLevel(logging.DEBUG)
-
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-
-    FMT = '%(asctime)s %(levelname)s %(message)s'
-    DATE_FMT = '%Y-%m-%d %H:%M:%S'
-    formatter = logging.Formatter(FMT, DATE_FMT)
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-
-    logger.setLevel(logging.DEBUG)
-
-
-def main():
-    try:
-        # Arguments
-        args = parse_args()
-
-        # Setups
-        setup_logging()
-        setup()
-
-        # Option defaults
-        save_encrypted = True
-        login_type = TYPE_NORMAL_ACCOUNT
-
-        # Load credentials
-        if os.path.exists(account_file_plain):
-            with open(account_file_plain) as f:
-                uid, pwd = f.read().strip().split(',')
-            if PY3K:
-                pwd = pwd.encode('utf-8')
-            pwd_md5 = hashlib.md5(pwd).hexdigest()
-        elif os.path.exists(account_file_encrypted):
-            with open(account_file_encrypted) as f:
-                uid, pwd_md5 = f.read().strip().split(',')
-            save_encrypted = False
-            login_type = TYPE_NUM_ACCOUNT
-        else:
-            uid = os.getenv('XUNLEI_UID')
-            pwd = os.getenv('XUNLEI_PASSWD')
-            if not uid or not pwd:
-                raise NoCredentialsError()
-            pwd_md5 = hashlib.md5(pwd).hexdigest()
-
-        # Routine
-        fast_d1ck(uid, pwd_md5, login_type,
-                  save=save_encrypted,
-                  gen_sh=args.gen_sh, gen_ipk=args.gen_ipk)
-    except NoCredentialsError:
-        logger.error('No credentials provided.')
-    except APIError as e:
-        logger.error('API Error %s: (%d) %s',
-                     e.command, e.errno, e.message or 'Unknown')
-    except KeyboardInterrupt:
-        pass

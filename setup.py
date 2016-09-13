@@ -17,7 +17,7 @@ setup(
     packages=['swjsq'],
     entry_points={
         'console_scripts': [
-            'swjsq = swjsq.__main__:main',
+            'swjsq = swjsq.cli:main',
         ],
     },
     license='MIT',
