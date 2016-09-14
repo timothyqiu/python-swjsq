@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 
-from swjsq._compat import PY3
+from swjsq._compat import text_type
 from swjsq.core import APIError
 from swjsq.core import fast_d1ck, setup
 from swjsq.core import TYPE_NORMAL_ACCOUNT, TYPE_NUM_ACCOUNT
@@ -85,6 +85,68 @@ def setup_logging():
     logger.setLevel(logging.DEBUG)
 
 
+class Credentials(object):
+    def __init__(self, login_type, uid, password_hash):
+        self.login_type = login_type
+        self.uid = uid
+        self.password_hash = password_hash
+
+
+def load_credentials_from_file(path, skip_password_hash=False):
+    with open(path, 'rb') as f:
+        uid, pwd = f.read().strip().split(b',')
+    if not skip_password_hash:
+        pwd = hashlib.md5(pwd).hexdigest()
+    # return type of hexdigest is different between PY2 and PY3
+    if pwd is text_type:
+        pwd = pwd.encode('utf-8')
+    return uid, pwd
+
+
+def load_credentials_from_env():
+    uid, pwd = os.getenv('XUNLEI_UID'), os.getenv('XUNLEI_PASSWD')
+    if not uid or not pwd:
+        raise RuntimeError('Environment variables not set')
+    # type of environment variable is different between PY2 and PY3
+    if uid is text_type:
+        uid = pwd.encode(sys.getfilesystemencoding())
+    if pwd is text_type:
+        pwd = pwd.encode(sys.getfilesystemencoding())
+    pwd = hashlib.md5(pwd).hexdigest()
+    # return type of hexdigest is different between PY2 and PY3
+    if pwd is text_type:
+        pwd = pwd.encode('utf-8')
+    return uid, pwd
+
+
+def load_credentials(account_file_plain, account_file_encrypted):
+    '''Try to load credentials.
+
+    :param account_file_plain: Path to plain text credentials
+    :param account_file_encrypted: Path to encrypted credentials
+    :returns: the Credentials object loaded
+    :raises NoCredentialsError: No credentials can be loaded.
+    '''
+    try:
+        uid, pwd_md5 = load_credentials_from_file(account_file_plain)
+        return Credentials(TYPE_NORMAL_ACCOUNT, uid, pwd_md5)
+    except Exception:
+        pass
+
+    try:
+        uid, pwd_md5 = load_credentials_from_file(account_file_encrypted,
+                                                  skip_password_hash=True)
+        return Credentials(TYPE_NUM_ACCOUNT, uid, pwd_md5)
+    except Exception:
+        pass
+
+    try:
+        uid, pwd_md5 = load_credentials_from_env()
+        return Credentials(TYPE_NORMAL_ACCOUNT, uid, pwd_md5)
+    except Exception:
+        raise NoCredentialsError()
+
+
 def main():
     try:
         # Arguments
@@ -94,31 +156,14 @@ def main():
         setup_logging()
         setup()
 
-        # Option defaults
-        save_encrypted = True
-        login_type = TYPE_NORMAL_ACCOUNT
-
         # Load credentials
-        if os.path.exists(args.account_file_plain):
-            with open(args.account_file_plain) as f:
-                uid, pwd = f.read().strip().split(',')
-            if PY3K:
-                pwd = pwd.encode('utf-8')
-            pwd_md5 = hashlib.md5(pwd).hexdigest()
-        elif os.path.exists(args.account_file_encrypted):
-            with open(args.account_file_encrypted) as f:
-                uid, pwd_md5 = f.read().strip().split(',')
-            save_encrypted = False
-            login_type = TYPE_NUM_ACCOUNT
-        else:
-            uid = os.getenv('XUNLEI_UID')
-            pwd = os.getenv('XUNLEI_PASSWD')
-            if not uid or not pwd:
-                raise NoCredentialsError()
-            pwd_md5 = hashlib.md5(pwd).hexdigest()
+        credentials = load_credentials(args.account_file_plain,
+                                       args.account_file_encrypted)
 
         # Routine
-        fast_d1ck(uid, pwd_md5, login_type,
+        save_encrypted = (credentials.login_type != TYPE_NUM_ACCOUNT)
+        fast_d1ck(credentials.uid, credentials.password_hash,
+                  credentials.login_type,
                   save=save_encrypted,
                   gen_sh=args.gen_sh, gen_ipk=args.gen_ipk,
                   account_file_encrypted=args.account_file_encrypted,
