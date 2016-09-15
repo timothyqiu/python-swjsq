@@ -19,8 +19,6 @@ class NoCredentialsError(RuntimeError):
 
 class Arguments(object):
     def __init__(self):
-        self.gen_sh = True
-        self.gen_ipk = True
         self.account_file_encrypted = '.swjsq.account'
         self.account_file_plain = 'swjsq.account.txt'
 
@@ -28,8 +26,6 @@ class Arguments(object):
 def show_usage():
     options = [
         ('-h, --help', 'show this help message and exit'),
-        ('--no-sh', 'skip script generation'),
-        ('--no-ipk', 'skip ipk generation'),
     ]
 
     print('usage: {} [OPTIONS]'.format(sys.argv[0]))
@@ -41,7 +37,7 @@ def show_usage():
 
 def parse_args():
     try:
-        long_opts = ['help', 'no-sh', 'no-ipk']
+        long_opts = ['help']
         opts, args = getopt.getopt(sys.argv[1:], 'h', long_opts)
     except getopt.GetoptError as err:
         print(err)
@@ -54,10 +50,6 @@ def parse_args():
         if o in ('-h', '--help'):
             show_usage()
             sys.exit()
-        elif o == '--no-sh':
-            args.gen_sh = False
-        elif o == '--no-ipk':
-            args.gen_ipk = False
         else:
             assert False, 'Unhandled option'
 
@@ -165,7 +157,6 @@ def main():
         fast_d1ck(credentials.uid, credentials.password_hash,
                   credentials.login_type,
                   save=save_encrypted,
-                  gen_sh=args.gen_sh, gen_ipk=args.gen_ipk,
                   account_file_encrypted=args.account_file_encrypted,
                   account_file_plain=args.account_file_plain)
     except NoCredentialsError:

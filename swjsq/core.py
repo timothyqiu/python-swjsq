@@ -8,7 +8,6 @@ import json
 import time
 import hashlib
 import binascii
-import tarfile
 import ssl
 import atexit
 
@@ -33,14 +32,9 @@ FALLBACK_INTERFACE = '119.147.41.210:80'
 
 if not PY3:
     import urllib2
-    from cStringIO import StringIO as sio
     rsa_pubexp = long(rsa_pubexp)
 else:
     import urllib.request as urllib2
-    from io import BytesIO as sio
-
-shell_file = 'swjsq_wget.sh'
-ipk_file = 'swjsq_0.0.1_all.ipk'
 
 
 class APIError(RuntimeError):
@@ -262,8 +256,8 @@ def api(cmd, uid, session_id='', extras=''):
     return response
 
 
-def fast_d1ck(uname, pwd, login_type, account_file_encrypted, account_file_plain,
-              save=True, gen_sh=True, gen_ipk=True):
+def fast_d1ck(uname, pwd, login_type,
+              account_file_encrypted, account_file_plain, save=True):
     if uname[-2] == ':':
         logger.error('sub account can not upgrade')
         os._exit(3)
@@ -294,14 +288,6 @@ def fast_d1ck(uname, pwd, login_type, account_file_encrypted, account_file_plain
         os._exit(3)
 
     _dial_account = _['dial_account']
-
-    _script_mtime = os.stat(os.path.realpath(__file__)).st_mtime
-    if gen_sh:
-        if not os.path.exists(shell_file) or os.stat(shell_file).st_mtime < _script_mtime:
-            make_wget_script(dt['userID'], pwd, _dial_account, _payload)
-    if gen_ipk:
-        if not os.path.exists(ipk_file) or os.stat(ipk_file).st_mtime < _script_mtime:
-            update_ipk()
 
     logger.info(
         'To Upgrade: %s%s Down %dM -> %dM, Up %dM -> %dM',
@@ -360,195 +346,3 @@ def fast_d1ck(uname, pwd, login_type, account_file_encrypted, account_file_plain
 
         i += 1
         time.sleep(600)  # 10 min
-
-
-def make_wget_script(uid, pwd, dial_account, _payload):
-    # i=1~17 keepalive, renew session, i++
-    # i=18 (3h) re-upgrade, i:=0
-    # i=100 login, i:=18
-    with open(shell_file, 'wb') as f:
-        _ = '''#!/bin/ash
-TEST_URL="https://baidu.com"
-UA_XL="User-Agent: swjsq/0.0.1"
-
-if [ ! -z "`wget --no-check-certificate -O - $TEST_URL 2>&1|grep "100%"`" ]; then
-   HTTP_REQ="wget -q --no-check-certificate -O - "
-   POST_ARG="--post-data="
-else
-   command -v curl >/dev/null 2>&1 && curl -kI $TEST_URL >/dev/null 2>&1 || { echo >&2 "Xunlei-FastD1ck cannot find wget or curl installed with https(ssl) enabled in this system."; exit 1; }
-   HTTP_REQ="curl -ks"
-   POST_ARG="--data "
-fi
-
-uid='''+str(uid)+'''
-pwd='''+rsa_encode(pwd)+'''
-nic=eth0
-peerid='''+MAC+'''
-uid_orig=$uid
-
-day_of_month_orig=`date +%d`
-orig_day_of_month=`echo $day_of_month_orig|grep -oE "[1-9]{1,2}"`
-portal=`$HTTP_REQ http://api.portal.swjsq.vip.xunlei.com:81/v2/queryportal`
-portal_ip=`echo $portal|grep -oE '([0-9]{1,3}[\.]){3}[0-9]{1,3}'`
-portal_port_temp=`echo $portal|grep -oE "port...[0-9]{1,5}"`
-portal_port=`echo $portal_port_temp|grep -oE '[0-9]{1,5}'`
-
-if [ -z "$portal_ip" ]; then
-    sleep 30
-    portal=`$HTTP_REQ http://api.portal.swjsq.vip.xunlei.com:81/v2/queryportal`
-    portal_ip=`echo $portal|grep -oE '([0-9]{1,3}[\.]){3}[0-9]{1,3}'`
-    portal_port_temp=`echo $portal|grep -oE "port...[0-9]{1,5}"`
-    portal_port=`echo $portal_port_temp|grep -oE '[0-9]{1,5}'`
-    if [ -z "$portal_ip" ]; then
-        portal_ip="119.147.41.210"
-        portal_port=80
-    fi
-fi
-api_url="http://$portal_ip:$portal_port/v2"
-i=100
-while true; do
-    if test $i -ge 100; then
-        echo "login xunlei"
-        ret=`$HTTP_REQ https://login.mobile.reg2t.sandai.net:443/ $POST_ARG"'''+_payload.replace('"', '\\"')+'''" --header "$UA_XL"`
-        session_temp=`echo $ret|grep -oE "sessionID...[A-F,0-9]{32}"`
-        session=`echo $session_temp|grep -oE "[A-F,0-9]{32}"`
-        uid_temp=`echo $ret|grep -oE "userID..[0-9]{9}"`
-        uid=`echo $uid_temp|grep -oE "[0-9]{9}"`
-        i=18
-        if [ -z "$session" ]; then
-            echo "session is empty"
-            i=100
-            sleep 60
-            uid=$uid_orig
-            continue
-        else
-            echo "session is $session"
-        fi
-
-      if [ -z "$uid" ]; then
-          #echo "uid is empty"
-          uid=$uid_orig
-      else
-          echo "uid is $uid"
-      fi
-    fi
-
-    if test $i -eq 18; then
-      _ts=`date +%s`0000
-      $HTTP_REQ "$api_url/upgrade?peerid=$peerid&userid=$uid&sessionid=$session&user_type=1&client_type=android-swjsq-'''+APP_VERSION+'''&time_and=$_ts&client_version=androidswjsq-'''+APP_VERSION+'''&os=android-5.0.1.24SmallRice&dial_account='''+dial_account+'''"
-      i=0
-    fi
-
-    sleep 1
-    day_of_month_orig=`date +%d`
-    day_of_month=`echo $day_of_month_orig|grep -oE "[1-9]{1,2}"`
-    if [[ -z $orig_day_of_month || $day_of_month -ne $orig_day_of_month ]]; then
-       orig_day_of_month=$day_of_month
-       _ts=`date +%s`0000
-       $HTTP_REQ "$api_url/recover?peerid=$peerid&userid=$uid&sessionid=$session&client_type=android-swjsq-'''+APP_VERSION+'''&time_and=$_ts&client_version=androidswjsq-'''+APP_VERSION+'''&os=android-5.0.1.24SmallRice&dial_account='''+dial_account+'''"
-       sleep 5
-       i=100
-       continue
-    fi
-
-    ret=`$HTTP_REQ https://login.mobile.reg2t.sandai.net:443/ $POST_ARG"{\\"protocolVersion\\":'''+str(PROTOCOL_VERSION)+''',\\"sequenceNo\\":1000000,\\"platformVersion\\":1,\\"peerID\\":\\"$peerid\\",\\"businessType\\":68,\\"clientVersion\\":\\"'''+APP_VERSION+'''\\",\\"isCompressed\\":0,\\"cmdID\\":11,\\"userID\\":$uid,\\"sessionID\\":\\"$session\\"}" --header "$UA_XL"`
-    error_code=`echo $ret|grep -oE "errorCode..[0-9]+"|grep -oE "[0-9]+"`
-    if [[ -z $error_code || $error_code -ne 0 ]]; then
-        i=100
-        continue
-    fi
-
-    _ts=`date +%s`0000
-    ret=`$HTTP_REQ "$api_url/keepalive?peerid=$peerid&userid=$uid&sessionid=$session&client_type=android-swjsq-'''+APP_VERSION+'''&time_and=$_ts&client_version=androidswjsq-'''+APP_VERSION+'''&os=android-5.0.1.24SmallRice&dial_account='''+dial_account+'''"`
-    if [ ! -z "`echo $ret|grep "not exist channel"`" ]; then
-        i=100
-    else
-        let i=i+1
-        sleep 590
-    fi
-done
-'''.replace("\r", "")
-        if PY3:
-            _ = _.encode("utf-8")
-        f.write(_)
-
-
-def update_ipk():
-    def _sio(s=None):
-        if not s:
-            return sio()
-        if PY3:
-            return sio(bytes(s, "ascii"))
-        else:
-            return sio(s)
-
-    def flen(fobj):
-        pos = fobj.tell()
-        fobj.seek(0)
-        _ = len(fobj.read())
-        fobj.seek(pos)
-        return _
-
-    def add_to_tar(tar, name, sio_obj, perm=420):
-        info = tarfile.TarInfo(name=name)
-        info.size = flen(sio_obj)
-        info.mode = perm
-        sio_obj.seek(0)
-        tar.addfile(info, sio_obj)
-
-    if os.path.exists(ipk_file):
-        os.remove(ipk_file)
-    ipk_fobj = tarfile.open(name=ipk_file, mode='w:gz')
-
-    data_stream = sio()
-    data_fobj = tarfile.open(fileobj=data_stream, mode='w:gz')
-    # /usr/bin/swjsq
-    data_content = open(shell_file, 'rb')
-    add_to_tar(data_fobj, './bin/swjsq', data_content, perm=511)
-    # /etc/init.d/swjsq
-    data_content = _sio('''#!/bin/sh /etc/rc.common
-START=90
-STOP=15
-USE_PROCD=1
-
-start_service()
-{
-    procd_open_instance
-    procd_set_param respawn ${respawn_threshold:-3600} ${respawn_timeout:-5} ${respawn_retry:-5}
-    procd_set_param command /bin/swjsq
-    procd_set_param stdout 1
-    procd_set_param stderr 1
-    procd_close_instance
-}
-''')
-    add_to_tar(data_fobj, './etc/init.d/swjsq', data_content, perm=511)
-    # wrap up
-    data_fobj.close()
-    add_to_tar(ipk_fobj, './data.tar.gz', data_stream)
-    data_stream.close()
-
-    control_stream = sio()
-    control_fobj = tarfile.open(fileobj=control_stream, mode='w:gz')
-    control_content = _sio('''Package: swjsq
-Version: 0.0.1
-Depends: libc
-Source: none
-Section: net
-Maintainer: fffonion
-Architecture: all
-Installed-Size: %d
-Description:  Xunlei Fast Dick
-''' % flen(data_content))
-    add_to_tar(control_fobj, './control', control_content)
-    control_fobj.close()
-    add_to_tar(ipk_fobj, './control.tar.gz', control_stream)
-    control_stream.close()
-
-    data_content.close()
-    control_content.close()
-
-    debian_binary_stream = _sio('2.0\n')
-    add_to_tar(ipk_fobj, './debian-binary', debian_binary_stream)
-    debian_binary_stream.close()
-
-    ipk_fobj.close()
