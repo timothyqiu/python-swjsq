@@ -101,7 +101,7 @@ def load_credentials_from_env():
         raise RuntimeError('Environment variables not set')
     # type of environment variable is different between PY2 and PY3
     if uid is text_type:
-        uid = pwd.encode(sys.getfilesystemencoding())
+        uid = uid.encode(sys.getfilesystemencoding())
     if pwd is text_type:
         pwd = pwd.encode(sys.getfilesystemencoding())
     pwd = hashlib.md5(pwd).hexdigest()
