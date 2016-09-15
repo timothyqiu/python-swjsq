@@ -101,7 +101,7 @@ def load_credentials_from_env():
         raise RuntimeError('Environment variables not set')
     # type of environment variable is different between PY2 and PY3
     if uid is text_type:
-        uid = pwd.encode(sys.getfilesystemencoding())
+        uid = uid.encode(sys.getfilesystemencoding())
     if pwd is text_type:
         pwd = pwd.encode(sys.getfilesystemencoding())
     pwd = hashlib.md5(pwd).hexdigest()
@@ -122,20 +122,21 @@ def load_credentials(account_file_plain, account_file_encrypted):
     try:
         uid, pwd_md5 = load_credentials_from_file(account_file_plain)
         return Credentials(TYPE_NORMAL_ACCOUNT, uid, pwd_md5)
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug('load_credentials_from_file plain: %s', e)
 
     try:
         uid, pwd_md5 = load_credentials_from_file(account_file_encrypted,
                                                   skip_password_hash=True)
         return Credentials(TYPE_NUM_ACCOUNT, uid, pwd_md5)
     except Exception:
-        pass
+        logging.debug('load_credentials_from_file encrypted: %s', e)
 
     try:
         uid, pwd_md5 = load_credentials_from_env()
         return Credentials(TYPE_NORMAL_ACCOUNT, uid, pwd_md5)
     except Exception:
+        logging.debug('load_credentials_from_env: %s', e)
         raise NoCredentialsError()
 
 
