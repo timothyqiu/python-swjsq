@@ -13,6 +13,8 @@ import ssl
 import atexit
 
 from swjsq._compat import PY3
+from swjsq._compat import binary_type
+from swjsq._compat import iterbytes
 
 logger = logging.getLogger(__name__)
 
@@ -75,24 +77,26 @@ except ImportError:
             b = (b * b) % m
         return result
 
-    def str_to_int(string):
+    def binary_to_int(binary):
         str_int = 0
-        for i in range(len(string)):
+        for c in iterbytes(binary):
             str_int = str_int << 8
-            str_int += ord(string[i])
+            str_int += c
         return str_int
 
     @cached
-    def rsa_encode(data):
-        result = modpow(str_to_int(data), rsa_pubexp, rsa_mod)
+    def rsa_encode(payload):
+        if not isinstance(payload, binary_type):
+            raise TypeError('payload should be of binary type')
+        result = modpow(binary_to_int(payload), rsa_pubexp, rsa_mod)
         return "{0:0256X}".format(result)  # length should be 1024bit, hard coded here
 else:
     cipher = RSA.construct((rsa_mod, rsa_pubexp))
 
-    def rsa_encode(s):
-        if PY3 and isinstance(s, str):
-            s = s.encode("utf-8")
-        _ = binascii.hexlify(cipher.encrypt(s, None)[0]).upper()
+    def rsa_encode(payload):
+        if not isinstance(payload, binary_type):
+            raise TypeError('payload should be of binary type')
+        _ = binascii.hexlify(cipher.encrypt(payload, None)[0]).upper()
         if PY3:
             _ = _.decode("utf-8")
         return _
@@ -184,7 +188,7 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT):
             "devicesign": device_sign,
             "isCompressed": 0,
             "cmdID": 1,
-            "userName": uname,
+            "userName": uname.decode('utf-8'),
             "passWord": pwd,
             "loginType": login_type,
             "sessionID": "",
