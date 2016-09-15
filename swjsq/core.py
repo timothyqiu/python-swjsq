@@ -12,8 +12,9 @@ import ssl
 import atexit
 
 from swjsq._compat import PY3
-from swjsq._compat import binary_type
-from swjsq._compat import iterbytes
+from swjsq._compat import binary_type, text_type
+from swjsq._compat import iterbytes, iteritems, range
+from swjsq._compat import request, URLError
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +32,7 @@ FALLBACK_MAC = '000000000000'
 FALLBACK_INTERFACE = '119.147.41.210:80'
 
 if not PY3:
-    import urllib2
     rsa_pubexp = long(rsa_pubexp)
-else:
-    import urllib.request as urllib2
 
 
 class APIError(RuntimeError):
@@ -149,14 +147,29 @@ def long2hex(l):
     return hex(l)[2:].upper().rstrip('L')
 
 
-def http_req(url, headers={}, body=None, encoding='utf-8'):
-    req = urllib2.Request(url)
-    for k in headers:
-        req.add_header(k, headers[k])
-    if PY3 and isinstance(body, str):
-        body = bytes(body, encoding='ascii')
-    resp = urllib2.urlopen(req, data=body)
+def http_req(url, headers=None, body=None, encoding=u'utf-8'):
+    req = request.Request(url)
+    for k, v in iteritems(headers or {}):
+        req.add_header(k, v)
+    if isinstance(body, text_type):
+        body = body.encode(u'ascii')
+
+    max_tries = 3
+    sleep_increment = 2
+    for i in range(max_tries):
+        try:
+            resp = request.urlopen(req, data=body)
+        except URLError as e:
+            if i + 1 == max_tries:
+                raise
+            logger.debug(u'Retry: %s', e)
+            time.sleep(i * sleep_increment)
+        else:
+            break
+
     ret = resp.read().decode(encoding)
+
+    # TODO: return text type instead of different types between PY2 and PY3
     if PY3 and isinstance(ret, bytes):
         ret = str(ret)
     return ret
