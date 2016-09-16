@@ -200,12 +200,12 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT):
             "appName": "ANDROID-com.xunlei.vip.swjsq",
             "rsaKey": {
                 'e': '{:06X}'.format(rsa_pubexp),
-                'n': '{:X}'.format(rsa_mod),
+                'n': '{:0256X}'.format(rsa_mod),
             },
-            "extensionList": ""
+            "extensionList": "",
     })
     ct = http_req('https://login.mobile.reg2t.sandai.net:443/', body=_payload, headers=header_xl, encoding='gbk')
-    return json.loads(ct), _payload
+    return json.loads(ct)
 
 
 def renew_xunlei(uid, session):
@@ -219,10 +219,10 @@ def renew_xunlei(uid, session):
         "isCompressed": 0,
         "cmdID": 11,
         "userID": uid,
-        "sessionID": session
+        "sessionID": session,
     })
     ct = http_req('https://login.mobile.reg2t.sandai.net:443/', body=_payload, headers=header_xl, encoding='gbk')
-    return json.loads(ct), _payload
+    return json.loads(ct)
 
 
 def api_url():
@@ -271,7 +271,7 @@ def fast_d1ck(uname, pwd, login_type,
         logger.error('sub account can not upgrade')
         os._exit(3)
 
-    dt, _payload = login_xunlei(uname, pwd, login_type)
+    dt = login_xunlei(uname, pwd, login_type)
     if 'sessionID' not in dt:
         logger.error('login failed, %s', dt['errorDesc'])
         logger.debug('%s', dt)
@@ -321,7 +321,7 @@ def fast_d1ck(uname, pwd, login_type,
             # i=18 (3h) re-upgrade, i:=0
             # i=100 login, i:=36
             if i == 100:
-                dt, _payload = login_xunlei(uname, pwd, login_type)
+                dt = login_xunlei(uname, pwd, login_type)
                 i = 18
             if i % 18 == 0:  # 3h
                 logger.info('Initializing upgrade')
