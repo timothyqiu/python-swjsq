@@ -29,7 +29,9 @@ rsa_pubexp = 0x010001
 APP_VERSION = "2.0.3.4"
 PROTOCOL_VERSION = 108
 FALLBACK_MAC = '000000000000'
-FALLBACK_INTERFACE = '119.147.41.210:80'
+FALLBACK_INTERFACE_IP = '119.147.41.210'
+FALLBACK_INTERFACE_PORT = '80'
+XUNLEI_LOGIN_URL = u'https://login.mobile.reg2t.sandai.net:443/'
 
 if not PY3:
     rsa_pubexp = long(rsa_pubexp)
@@ -79,15 +81,15 @@ except ImportError:
     @cached
     def rsa_encode(payload):
         if not isinstance(payload, binary_type):
-            raise TypeError('payload should be of binary type')
+            raise TypeError(u'payload should be of binary type')
         result = modpow(binary_to_int(payload), rsa_pubexp, rsa_mod)
-        return "{0:0256X}".format(result)  # length should be 1024bit, hard coded here
+        return u'{0:0256X}'.format(result)  # length should be 1024bit, hard coded here
 else:
     cipher = RSA.construct((rsa_mod, rsa_pubexp))
 
     def rsa_encode(payload):
         if not isinstance(payload, binary_type):
-            raise TypeError('payload should be of binary type')
+            raise TypeError(u'payload should be of binary type')
         _ = binascii.hexlify(cipher.encrypt(payload, None)[0]).upper()
         if PY3:
             _ = _.decode("utf-8")
@@ -143,14 +145,21 @@ def get_mac(nic='', to_splt=':'):
     return FALLBACK_MAC
 
 
-def http_req(url, headers=None, body=None, encoding=u'utf-8'):
+def http_req(url, headers=None, body=None, max_tries=3):
+    '''Get result of HTTP request
+    :param url: URL of the target
+    :param headers: optional request headers as dict
+    :param body: optional request body as binary type or ascii text
+    :param max_tries: total count of failed tries before raising error
+    :returns: body of the response as binary type
+    :raises URLError: request failed even after retries
+    '''
     req = request.Request(url)
     for k, v in iteritems(headers or {}):
         req.add_header(k, v)
     if isinstance(body, text_type):
         body = body.encode(u'ascii')
 
-    max_tries = 3
     sleep_increment = 2
     for i in range(max_tries):
         try:
@@ -163,74 +172,120 @@ def http_req(url, headers=None, body=None, encoding=u'utf-8'):
         else:
             break
 
-    ret = resp.read().decode(encoding)
-
-    # TODO: return text type instead of different types between PY2 and PY3
-    if PY3 and isinstance(ret, bytes):
-        ret = str(ret)
-    return ret
+    return resp.read()
 
 
-def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT):
-    pwd = rsa_encode(pwd_md5)
-    fake_device_id = hashlib.md5(("%s23333" % pwd_md5).encode('utf-8')).hexdigest()  # just generate a 32bit string
+def json_http_req(url, headers=None, body=None, encoding=None):
+    encoding = encoding or u'utf-8'
+
+    response = http_req(url, headers, body)
+
+    return json.loads(response.decode(encoding))
+
+
+def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
+                 verify_key=None, verify_code=None):
+    verify_key = verify_key or u''
+    verify_code = verify_code or u''
+
+    # just generate a 32-bit string
+    fake_device_id = hashlib.md5(("%s23333" % pwd_md5).encode('utf-8')).hexdigest()
+
     # sign = div.10?.device_id + md5(sha1(packageName + businessType + md5(a protocolVersion specific GUID)))
     device_sign = "div100.%s%s" % (fake_device_id, hashlib.md5(
         hashlib.sha1(
             ("%scom.xunlei.vip.swjsq68700d1872b772946a6940e4b51827e8af" % fake_device_id).encode('utf-8')
         ).hexdigest().encode('utf-8')
     ).hexdigest())
-    _payload = json.dumps({
-            "protocolVersion": PROTOCOL_VERSION,  # 109
-            "sequenceNo": 1000001,
-            "platformVersion": 1,
-            "sdkVersion": 177550,  # 177600
-            "peerID": MAC,
-            "businessType": 68,
-            "clientVersion": APP_VERSION,
-            "devicesign": device_sign,
-            "isCompressed": 0,
-            "cmdID": 1,
-            "userName": uname.decode('utf-8'),
-            "passWord": pwd,
-            "loginType": login_type,
-            "sessionID": "",
-            "verifyKey": "",
-            "verifyCode": "",
-            "appName": "ANDROID-com.xunlei.vip.swjsq",
-            "rsaKey": {
-                'e': '{:06X}'.format(rsa_pubexp),
-                'n': '{:0256X}'.format(rsa_mod),
-            },
-            "extensionList": "",
+
+    payload = json.dumps({
+        u'protocolVersion': PROTOCOL_VERSION,  # 109
+        u'sequenceNo': 1000001,
+        u'platformVersion': 1,
+        u'sdkVersion': 177550,  # 177600
+        u'peerID': MAC,
+        u'businessType': 68,
+        u'clientVersion': APP_VERSION,
+        u'devicesign': device_sign,
+        u'isCompressed': 0,
+        u'cmdID': 1,
+        u'userName': uname.decode('utf-8'),
+        u'passWord': rsa_encode(pwd_md5),
+        u'loginType': login_type,
+        u'sessionID': u'',
+        u'verifyKey': verify_key,
+        u'verifyCode': verify_code,
+        u'appName': u'ANDROID-com.xunlei.vip.swjsq',
+        u'rsaKey': {
+            u'e': u'{:06X}'.format(rsa_pubexp),
+            u'n': u'{:0256X}'.format(rsa_mod),
+        },
+        u'extensionList': u'',
     })
-    ct = http_req('https://login.mobile.reg2t.sandai.net:443/', body=_payload, headers=header_xl, encoding='gbk')
-    return json.loads(ct)
+
+    # TODO: Verification code handling
+    # If "errorCode" is 6, "errorDescUrl" contains URL of the verification
+    # code image. Access the URL and we can get the image, and the
+    # "VERIFY_KEY" from cookie. Next time we send the login request, fill in
+    # the "verifyKey" and "verifyCode".
+    response = json_http_req(XUNLEI_LOGIN_URL,
+                             body=payload, headers=header_xl, encoding=u'gbk')
+
+    code = response.get(u'errorCode')
+    if code != 0:
+        message = response.get(u'errorDesc', u'Unknown')
+        logger.warn(u'Login failed: (%d) %s', code, message)
+        return response
+
+    logger.debug(u'isVip:%s payId:%s payName:%s',
+                 response.get(u'isVip'),
+                 response.get(u'payId'), response.get(u'payName'))
+    return response
 
 
 def renew_xunlei(uid, session):
-    _payload = json.dumps({
-        "protocolVersion": 108,
-        "sequenceNo": 1000000,
-        "platformVersion": 1,
-        "peerID": MAC,
-        "businessType": 68,
-        "clientVersion": APP_VERSION,
-        "isCompressed": 0,
-        "cmdID": 11,
-        "userID": uid,
-        "sessionID": session,
+    payload = json.dumps({
+        u'protocolVersion': 108,
+        u'sequenceNo': 1000000,
+        u'platformVersion': 1,
+        u'peerID': MAC,
+        u'businessType': 68,
+        u'clientVersion': APP_VERSION,
+        u'isCompressed': 0,
+        u'cmdID': 11,
+        u'userID': uid,
+        u'sessionID': session,
     })
-    ct = http_req('https://login.mobile.reg2t.sandai.net:443/', body=_payload, headers=header_xl, encoding='gbk')
-    return json.loads(ct)
+    response = json_http_req(XUNLEI_LOGIN_URL,
+                             body=payload, headers=header_xl, encoding=u'gbk')
+
+    code = response.get(u'errorCode')
+    if code != 0:
+        message = response.get(u'errorDesc', u'Unknown')
+        logger.warn(u'Renew failed: (%d) %s', code, message)
+        return response
+
+    return response
 
 
 def api_url():
-    portal = json.loads(http_req("http://api.portal.swjsq.vip.xunlei.com:81/v2/queryportal"))
-    if portal['errno']:
-        logger.error('get interface_ip failed, using fallback address')
-        return FALLBACK_INTERFACE
-    return '%s:%s' % (portal['interface_ip'], portal['interface_port'])
+    portal = json_http_req(u'http://api.portal.swjsq.vip.xunlei.com:81/v2/queryportal')
+
+    errno = portal.get(u'errno')
+    if errno != 0:
+        message = portal.get(u'message', u'Unknown')
+        logger.warn(u'queryportal failed: (%d) %s', errno, message)
+        return '{}:{}'.format(FALLBACK_INTERFACE_IP, FALLBACK_INTERFACE_PORT)
+
+    try:
+        ip = portal[u'interface_ip']
+        port = portal[u'interface_port']
+    except KeyError as e:
+        logger.warn(u'queryportal format error: %s', e)
+        ip = FALLBACK_INTERFACE_IP
+        port = FALLBACK_INTERFACE_PORT
+
+    return '{}:{}'.format(ip, port)
 
 
 def setup():
@@ -253,7 +308,7 @@ def api(cmd, uid, session_id='', extras=''):
             uid,
             ('&%s' % extras) if extras else '',
     )
-    response = json.loads(http_req(url, headers=header_api))
+    response = json_http_req(url, headers=header_api)
 
     errno = response.get('errno')
     if errno:
@@ -272,16 +327,12 @@ def fast_d1ck(uname, pwd, login_type,
         os._exit(3)
 
     dt = login_xunlei(uname, pwd, login_type)
-    if 'sessionID' not in dt:
-        logger.error('login failed, %s', dt['errorDesc'])
-        logger.debug('%s', dt)
+    if dt.get(u'errorCode') != 0:
         os._exit(1)
-    elif ('isVip' not in dt or not dt['isVip']) and ('payId' not in dt or dt['payId'] not in [5, 702]):
-        # FIX ME: rewrite if with payId
-        logger.warn('you are probably not xunlei vip, buy buy buy!')
-        logger.debug('isVip:%s payId:%s payName:%s',
-                     dt.get('isVip'), dt.get('payId'), dt.get('payName'))
-        # os._exit(2)
+
+    if (not dt.get(u'isVip')) and (dt.get(u'payId') not in [5, 702]):
+        logger.warn(u'You are probably not Xunlei VIP')
+
     logger.info('Login xunlei succeeded')
     if save:
         try:
@@ -333,7 +384,7 @@ def fast_d1ck(uname, pwd, login_type,
                     logger.info('Upgrade done: Down %dM, Up %dM', _['bandwidth']['downstream'], _['bandwidth']['upstream'])
                     i = 0
             else:
-                _dt_t, _paylod_t = renew_xunlei(dt['userID'], dt['sessionID'])
+                _dt_t = renew_xunlei(dt['userID'], dt['sessionID'])
                 if _dt_t['errorCode']:
                     i = 100
                     continue
