@@ -15,6 +15,7 @@ from swjsq._compat import PY3
 from swjsq._compat import binary_type, text_type
 from swjsq._compat import iterbytes, iteritems, range
 from swjsq._compat import request, URLError
+from swjsq.exceptions import APIError, LoginError
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +36,6 @@ XUNLEI_LOGIN_URL = u'https://login.mobile.reg2t.sandai.net:443/'
 
 if not PY3:
     rsa_pubexp = long(rsa_pubexp)
-
-
-class APIError(RuntimeError):
-    def __init__(self, command, errno, message):
-        self.command = command
-        self.errno = errno
-        self.message = message
 
 
 try:
@@ -161,13 +155,13 @@ def http_req(url, headers=None, body=None, max_tries=3):
         body = body.encode(u'ascii')
 
     sleep_increment = 2
-    for i in range(max_tries):
+    for i in range(1, max_tries + 1):
         try:
             resp = request.urlopen(req, data=body)
         except URLError as e:
-            if i + 1 == max_tries:
+            logger.debug(u'#%d request failed: %s', i, e)
+            if i == max_tries:
                 raise
-            logger.debug(u'Retry: %s', e)
             time.sleep(i * sleep_increment)
         else:
             break
@@ -181,6 +175,27 @@ def json_http_req(url, headers=None, body=None, encoding=None):
     response = http_req(url, headers, body)
 
     return json.loads(response.decode(encoding))
+
+
+class Session(object):
+    def __init__(self, login_response):
+        self.raw = login_response
+
+    @property
+    def user_id(self):
+        return self.raw.get(u'userID')
+
+    @property
+    def session_id(self):
+        return self.raw.get(u'sessionID')
+
+    @property
+    def can_upgrade(self):
+        if self.raw.get(u'isVip'):
+            return True
+        if self.get(u'payId') in [5, 702]:
+            return True
+        return False
 
 
 def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
@@ -233,17 +248,17 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
 
     code = response.get(u'errorCode')
     if code != 0:
-        message = response.get(u'errorDesc', u'Unknown')
-        logger.warn(u'Login failed: (%d) %s', code, message)
-        return response
+        message = response.get(u'errorDesc')
+        logger.debug(u'Login failed: (%d) %s', code, message or 'Unknown')
+        raise LoginError(code, message)
 
     logger.debug(u'isVip:%s payId:%s payName:%s',
                  response.get(u'isVip'),
                  response.get(u'payId'), response.get(u'payName'))
-    return response
+    return Session(response)
 
 
-def renew_xunlei(uid, session):
+def renew_xunlei(session):
     payload = json.dumps({
         u'protocolVersion': 108,
         u'sequenceNo': 1000000,
@@ -253,17 +268,17 @@ def renew_xunlei(uid, session):
         u'clientVersion': APP_VERSION,
         u'isCompressed': 0,
         u'cmdID': 11,
-        u'userID': uid,
-        u'sessionID': session,
+        u'userID': session.user_id,
+        u'sessionID': session.session_id,
     })
     response = json_http_req(XUNLEI_LOGIN_URL,
                              body=payload, headers=header_xl, encoding=u'gbk')
 
     code = response.get(u'errorCode')
     if code != 0:
-        message = response.get(u'errorDesc', u'Unknown')
-        logger.warn(u'Renew failed: (%d) %s', code, message)
-        return response
+        message = response.get(u'errorDesc')
+        logger.debug(u'Renew failed: (%d) %s', code, message or u'Unknown')
+        raise LoginError(code, message)
 
     return response
 
@@ -326,23 +341,21 @@ def fast_d1ck(uname, pwd, login_type,
         logger.error('sub account can not upgrade')
         os._exit(3)
 
-    dt = login_xunlei(uname, pwd, login_type)
-    if dt.get(u'errorCode') != 0:
-        os._exit(1)
+    session = login_xunlei(uname, pwd, login_type)
+    logger.info('Login xunlei succeeded')
 
-    if (not dt.get(u'isVip')) and (dt.get(u'payId') not in [5, 702]):
+    if not session.can_upgrade:
         logger.warn(u'You are probably not Xunlei VIP')
 
-    logger.info('Login xunlei succeeded')
     if save:
         try:
             os.remove(account_file_plain)
         except:
             pass
         with open(account_file_encrypted, 'w') as f:
-            f.write('%s,%s' % (dt['userID'], pwd))
+            f.write('%s,%s' % (session.user_id, pwd))
 
-    _ = api('bandwidth', dt['userID'])
+    _ = api('bandwidth', session.user_id)
     if not _['can_upgrade']:
         logger.error('can not upgrade, so sad TAT %s', _['message'])
         os._exit(3)
@@ -361,9 +374,12 @@ def fast_d1ck(uname, pwd, login_type,
     def _atexit_func():
         logger.info("Sending recover request")
         try:
-            api('recover', dt['userID'], dt['sessionID'], extras="dial_account=%s" % _dial_account)
+            api('recover', session.user_id, session.session_id, extras="dial_account=%s" % _dial_account)
         except KeyboardInterrupt:
             logger.info('Secondary ctrl+c pressed, exiting')
+        else:
+            logger.info("Recover done. exiting")
+
     atexit.register(_atexit_func)
     i = 0
     while True:
@@ -372,23 +388,30 @@ def fast_d1ck(uname, pwd, login_type,
             # i=18 (3h) re-upgrade, i:=0
             # i=100 login, i:=36
             if i == 100:
-                dt = login_xunlei(uname, pwd, login_type)
+                try:
+                    new_session = login_xunlei(uname, pwd, login_type)
+                except LoginError:
+                    pass
+                else:
+                    session = new_session
                 i = 18
+
             if i % 18 == 0:  # 3h
                 logger.info('Initializing upgrade')
                 if i:  # not first time
-                    api('recover', dt['userID'], dt['sessionID'], extras="dial_account=%s" % _dial_account)
+                    api('recover', session.user_id, session.session_id, extras="dial_account=%s" % _dial_account)
                     time.sleep(5)
-                _ = api('upgrade', dt['userID'], dt['sessionID'], extras="user_type=1&dial_account=%s" % _dial_account)
-                if not _['errno']:
-                    logger.info('Upgrade done: Down %dM, Up %dM', _['bandwidth']['downstream'], _['bandwidth']['upstream'])
-                    i = 0
+                _ = api('upgrade', session.user_id, session.session_id, extras="user_type=1&dial_account=%s" % _dial_account)
+                logger.info('Upgrade done: Down %dM, Up %dM', _['bandwidth']['downstream'], _['bandwidth']['upstream'])
+                i = 0
             else:
-                _dt_t = renew_xunlei(dt['userID'], dt['sessionID'])
-                if _dt_t['errorCode']:
+                try:
+                    renew_xunlei(session)
+                except LoginError:
+                    # Relogin if renew failed
                     i = 100
                     continue
-                _ = api('keepalive', dt['userID'], dt['sessionID'])
+                _ = api('keepalive', session.user_id, session.session_id)
 
             logger.debug('%s', _)
         except APIError as e:

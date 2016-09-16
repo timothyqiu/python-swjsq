@@ -8,9 +8,9 @@ import os
 import sys
 
 from swjsq._compat import text_type
-from swjsq.core import APIError
 from swjsq.core import fast_d1ck, setup
 from swjsq.core import TYPE_NORMAL_ACCOUNT, TYPE_NUM_ACCOUNT
+from swjsq.exceptions import APIError, LoginError
 
 
 class NoCredentialsError(RuntimeError):
@@ -162,6 +162,9 @@ def main():
                   account_file_plain=args.account_file_plain)
     except NoCredentialsError:
         logging.error('No credentials provided.')
+    except LoginError as e:
+        logging.error('Login Error: (%d) %s',
+                      e.errno, e.message or 'Unknown')
     except APIError as e:
         logging.error('API Error %s: (%d) %s',
                       e.command, e.errno, e.message or 'Unknown')
