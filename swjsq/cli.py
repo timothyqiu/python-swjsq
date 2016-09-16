@@ -129,13 +129,13 @@ def load_credentials(account_file_plain, account_file_encrypted):
         uid, pwd_md5 = load_credentials_from_file(account_file_encrypted,
                                                   skip_password_hash=True)
         return Credentials(TYPE_NUM_ACCOUNT, uid, pwd_md5)
-    except Exception:
+    except Exception as e:
         logging.debug('load_credentials_from_file encrypted: %s', e)
 
     try:
         uid, pwd_md5 = load_credentials_from_env()
         return Credentials(TYPE_NORMAL_ACCOUNT, uid, pwd_md5)
-    except Exception:
+    except Exception as e:
         logging.debug('load_credentials_from_env: %s', e)
         raise NoCredentialsError()
 
