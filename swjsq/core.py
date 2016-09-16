@@ -143,10 +143,6 @@ def get_mac(nic='', to_splt=':'):
     return FALLBACK_MAC
 
 
-def long2hex(l):
-    return hex(l)[2:].upper().rstrip('L')
-
-
 def http_req(url, headers=None, body=None, encoding=u'utf-8'):
     req = request.Request(url)
     for k, v in iteritems(headers or {}):
@@ -203,8 +199,8 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT):
             "verifyCode": "",
             "appName": "ANDROID-com.xunlei.vip.swjsq",
             "rsaKey": {
-                "e": "%06X" % rsa_pubexp,
-                "n": long2hex(rsa_mod)
+                'e': '{:06X}'.format(rsa_pubexp),
+                'n': '{:X}'.format(rsa_mod),
             },
             "extensionList": ""
     })
