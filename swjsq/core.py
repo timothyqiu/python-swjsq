@@ -217,7 +217,7 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
         u'sequenceNo': 1000001,
         u'platformVersion': 1,
         u'sdkVersion': 177550,  # 177600
-        u'peerID': MAC,
+        u'peerID': PEER_ID,
         u'businessType': 68,
         u'clientVersion': APP_VERSION,
         u'devicesign': device_sign,
@@ -262,7 +262,7 @@ def renew_xunlei(session):
         u'protocolVersion': 108,
         u'sequenceNo': 1000000,
         u'platformVersion': 1,
-        u'peerID': MAC,
+        u'peerID': PEER_ID,
         u'businessType': 68,
         u'clientVersion': APP_VERSION,
         u'isCompressed': 0,
@@ -319,9 +319,9 @@ def api_url():
 
 
 def setup():
-    global MAC
+    global PEER_ID
     global API_URL
-    MAC = get_mac(to_splt='').upper() + '004V'
+    PEER_ID = get_mac(to_splt='').upper() + '004V'
     API_URL = api_url()
 
     logger.debug(u'API_URL: %s', API_URL)
@@ -334,7 +334,7 @@ def api(cmd, uid, session_id='', extras=''):
             cmd,
             ('sessionid=%s&' % session_id) if session_id else '',
             APP_VERSION,
-            MAC,
+            PEER_ID,
             time.time() * 1000,
             APP_VERSION,
             uid,
