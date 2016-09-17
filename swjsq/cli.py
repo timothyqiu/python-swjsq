@@ -145,13 +145,15 @@ def main():
         # Arguments
         args = parse_args()
 
-        # Setups
+        # Logging
         setup_logging()
-        setup()
 
         # Load credentials
         credentials = load_credentials(args.account_file_plain,
                                        args.account_file_encrypted)
+
+        # Setup global state
+        setup()
 
         # Routine
         save_encrypted = (credentials.login_type != TYPE_NUM_ACCOUNT)

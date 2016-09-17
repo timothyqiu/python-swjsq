@@ -30,8 +30,7 @@ rsa_pubexp = 0x010001
 APP_VERSION = "2.0.3.4"
 PROTOCOL_VERSION = 108
 FALLBACK_MAC = '000000000000'
-FALLBACK_INTERFACE_IP = '119.147.41.210'
-FALLBACK_INTERFACE_PORT = '80'
+FALLBACK_INTERFACE = u'119.147.41.210:80'
 XUNLEI_LOGIN_URL = u'https://login.mobile.reg2t.sandai.net:443/'
 
 if not PY3:
@@ -169,10 +168,10 @@ def http_req(url, headers=None, body=None, max_tries=3):
     return resp.read()
 
 
-def json_http_req(url, headers=None, body=None, encoding=None):
+def json_http_req(url, headers=None, body=None, max_tries=3, encoding=None):
     encoding = encoding or u'utf-8'
 
-    response = http_req(url, headers, body)
+    response = http_req(url, headers, body, max_tries)
 
     return json.loads(response.decode(encoding))
 
@@ -283,24 +282,40 @@ def renew_xunlei(session):
     return response
 
 
+def portal_http_req():
+    # Try to connect to the first available query portal server
+    PORTAL_URLS = [
+        u'http://api.portal.swjsq.vip.xunlei.com:81/v2/queryportal',
+        u'http://api2.portal.swjsq.vip.xunlei.com:81/v2/queryportal',
+    ]
+    for url in PORTAL_URLS:
+        try:
+            return json_http_req(url, max_tries=1)
+        except URLError:
+            pass
+    return None
+
+
 def api_url():
-    portal = json_http_req(u'http://api.portal.swjsq.vip.xunlei.com:81/v2/queryportal')
+    portal = portal_http_req()
+    if not portal:
+        logger.warn(u'queryportal failed: no portal server available')
+        return FALLBACK_INTERFACE
 
     errno = portal.get(u'errno')
     if errno != 0:
         message = portal.get(u'message', u'Unknown')
         logger.warn(u'queryportal failed: (%d) %s', errno, message)
-        return '{}:{}'.format(FALLBACK_INTERFACE_IP, FALLBACK_INTERFACE_PORT)
+        return FALLBACK_INTERFACE
 
     try:
         ip = portal[u'interface_ip']
         port = portal[u'interface_port']
     except KeyError as e:
         logger.warn(u'queryportal format error: %s', e)
-        ip = FALLBACK_INTERFACE_IP
-        port = FALLBACK_INTERFACE_PORT
+        return FALLBACK_INTERFACE
 
-    return '{}:{}'.format(ip, port)
+    return u'{}:{}'.format(ip, port)
 
 
 def setup():
@@ -308,6 +323,8 @@ def setup():
     global API_URL
     MAC = get_mac(to_splt='').upper() + '004V'
     API_URL = api_url()
+
+    logger.debug(u'API_URL: %s', API_URL)
 
 
 def api(cmd, uid, session_id='', extras=''):
