@@ -27,6 +27,7 @@ if hasattr(ssl, '_create_unverified_context') and hasattr(ssl, '_create_default_
 rsa_mod = 0xAC69F5CCC8BDE47CD3D371603748378C9CFAD2938A6B021E0E191013975AD683F5CBF9ADE8BD7D46B4D2EC2D78AF146F1DD2D50DC51446BB8880B8CE88D476694DFC60594393BEEFAA16F5DBCEBE22F89D640F5336E42F587DC4AFEDEFEAC36CF007009CCCE5C1ACB4FF06FBA69802A8085C2C54BADD0597FC83E6870F1E36FD
 rsa_pubexp = 0x010001
 
+BUSINESS_TYPE = 68  # Constant. Probably for SWJSQ
 APP_VERSION = "2.0.3.4"
 PROTOCOL_VERSION = 108
 FALLBACK_MAC = '000000000000'
@@ -91,8 +92,6 @@ else:
 
 TYPE_NORMAL_ACCOUNT = 0
 TYPE_NUM_ACCOUNT = 1
-
-UNICODE_WARNING_SHOWN = False
 
 header_xl = {
     'Content-Type': '',
@@ -218,7 +217,7 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
         u'platformVersion': 1,
         u'sdkVersion': 177550,  # 177600
         u'peerID': PEER_ID,
-        u'businessType': 68,
+        u'businessType': BUSINESS_TYPE,
         u'clientVersion': APP_VERSION,
         u'devicesign': device_sign,
         u'isCompressed': 0,
@@ -259,11 +258,11 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
 
 def renew_xunlei(session):
     payload = json.dumps({
-        u'protocolVersion': 108,
+        u'protocolVersion': PROTOCOL_VERSION,
         u'sequenceNo': 1000000,
         u'platformVersion': 1,
         u'peerID': PEER_ID,
-        u'businessType': 68,
+        u'businessType': BUSINESS_TYPE,
         u'clientVersion': APP_VERSION,
         u'isCompressed': 0,
         u'cmdID': 11,
