@@ -15,7 +15,7 @@ from swjsq._compat import PY3
 from swjsq._compat import binary_type, text_type
 from swjsq._compat import iterbytes, iteritems, range
 from swjsq._compat import request, URLError
-from swjsq.exceptions import APIError, LoginError
+from swjsq.exceptions import APIError, LoginError, SWJSQError
 
 logger = logging.getLogger(__name__)
 
@@ -406,8 +406,8 @@ def fast_d1ck(uname, pwd, login_type,
             if i == 100:
                 try:
                     new_session = login_xunlei(uname, pwd, login_type)
-                except LoginError:
-                    pass
+                except SWJSQError:
+                    logger.error('login_xunlei failed')
                 else:
                     session = new_session
                 i = 18
@@ -423,8 +423,8 @@ def fast_d1ck(uname, pwd, login_type,
             else:
                 try:
                     renew_xunlei(session)
-                except LoginError:
-                    # Relogin if renew failed
+                except SWJSQError:
+                    logger.error('renew_xunlei failed')
                     i = 100
                     continue
                 _ = api('keepalive', session.user_id, session.session_id)
