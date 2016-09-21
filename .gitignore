@@ -39,5 +39,3 @@ nosetests.xml
 *.saz
 .swjsq.account
 swjcq_account.txt
-*.sh
-*.ipk
