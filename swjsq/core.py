@@ -132,7 +132,7 @@ def get_mac(nic='', to_splt=':'):
                 return FALLBACK_MAC
             else:
                 return _[0].replace(splt, to_splt)
-    except:
+    except Exception:
         pass
     return FALLBACK_MAC
 
@@ -366,7 +366,7 @@ def fast_d1ck(uname, pwd, login_type,
     if save:
         try:
             os.remove(account_file_plain)
-        except:
+        except Exception:
             pass
         with open(account_file_encrypted, 'w') as f:
             f.write('%s,%s' % (session.user_id, pwd))
