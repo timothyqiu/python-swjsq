@@ -191,7 +191,7 @@ class Session(object):
     def can_upgrade(self):
         if self.raw.get(u'isVip'):
             return True
-        if self.get(u'payId') in [5, 702]:
+        if self.raw.get(u'payId') in [5, 702]:
             return True
         return False
 
