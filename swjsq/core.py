@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+import collections
 import logging
 import os
 import re
@@ -196,6 +197,40 @@ class Session(object):
         return False
 
 
+class Bandwidth(object):
+    BandwidthDetail = collections.namedtuple(u'BandwidthDetail',
+                                             u'upstream downstream')
+
+    def __init__(self, response):
+        self.raw = response
+
+    @property
+    def can_upgrade(self):
+        return self.raw.get(u'can_upgrade', False)
+
+    @property
+    def dial_account(self):
+        return self.raw.get(u'dial_account')
+
+    @property
+    def original(self):
+        detail = self.raw[u'bandwidth']  # FIXME: what if no such field?
+        return self.BandwidthDetail(detail[u'upstream'], detail[u'downstream'])
+
+    @property
+    def max(self):
+        detail = self.raw[u'max_bandwidth']  # FIXME: what if no such field?
+        return self.BandwidthDetail(detail[u'upstream'], detail[u'downstream'])
+
+    @property
+    def province_name(self):
+        return self.raw.get(u'province_name')
+
+    @property
+    def sp_name(self):
+        return self.raw.get(u'sp_name')
+
+
 def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
                  verify_key=None, verify_code=None):
     verify_key = verify_key or u''
@@ -351,6 +386,36 @@ def api(cmd, uid, session_id='', extras=''):
     return response
 
 
+def get_bandwidth(session):
+    response = api('bandwidth', session.user_id)
+    bandwidth = Bandwidth(response)
+
+    KB_PER_MB = 1024
+    logger.info('To Upgrade: %s%s Down %dM -> %dM, Up %dM -> %dM',
+                bandwidth.province_name, bandwidth.sp_name,
+                bandwidth.original.downstream / KB_PER_MB,
+                bandwidth.max.downstream / KB_PER_MB,
+                bandwidth.original.upstream / KB_PER_MB,
+                bandwidth.max.upstream / KB_PER_MB)
+    return bandwidth
+
+
+def upgrade(session, bandwidth):
+    extras = u'user_type=1&dial_account={}'.format(bandwidth.dial_account)
+    return api(u'upgrade',
+               session.user_id, session.session_id, extras=extras)
+
+
+def recover(session, bandwidth):
+    extras = u'dial_account={}'.format(bandwidth.dial_account)
+    return api(u'recover',
+               session.user_id, session.session_id, extras=extras)
+
+
+def heartbeat(session):
+    return api(u'keepalive', session.user_id, session.session_id)
+
+
 def fast_d1ck(uname, pwd, login_type,
               account_file_encrypted, account_file_plain, save=True):
     if uname[-2] == ':':
@@ -371,30 +436,19 @@ def fast_d1ck(uname, pwd, login_type,
         with open(account_file_encrypted, 'w') as f:
             f.write('%s,%s' % (session.user_id, pwd))
 
-    _ = api('bandwidth', session.user_id)
-    if not _['can_upgrade']:
-        logger.error('can not upgrade, so sad TAT %s', _['message'])
+    bandwidth = get_bandwidth(session)
+    if not bandwidth.can_upgrade:
+        logger.error(u'Does not support upgrading.')
         os._exit(3)
 
-    _dial_account = _['dial_account']
-
-    logger.info(
-        'To Upgrade: %s%s Down %dM -> %dM, Up %dM -> %dM',
-        _['province_name'], _['sp_name'],
-        _['bandwidth']['downstream']/1024,
-        _['max_bandwidth']['downstream']/1024,
-        _['bandwidth']['upstream']/1024,
-        _['max_bandwidth']['upstream']/1024,
-    )
-
     def _atexit_func():
-        logger.info("Sending recover request")
+        logger.info(u'Sending recover request')
         try:
-            api('recover', session.user_id, session.session_id, extras="dial_account=%s" % _dial_account)
+            recover(session, bandwidth)
         except KeyboardInterrupt:
-            logger.info('Secondary ctrl+c pressed, exiting')
+            logger.info(u'Secondary ctrl+c pressed, exiting')
         else:
-            logger.info("Recover done. exiting")
+            logger.info(u'Recover done. exiting')
 
     atexit.register(_atexit_func)
     i = 0
@@ -415,9 +469,9 @@ def fast_d1ck(uname, pwd, login_type,
             if i % 18 == 0:  # 3h
                 logger.info('Initializing upgrade')
                 if i:  # not first time
-                    api('recover', session.user_id, session.session_id, extras="dial_account=%s" % _dial_account)
+                    recover(session, bandwidth)
                     time.sleep(5)
-                _ = api('upgrade', session.user_id, session.session_id, extras="user_type=1&dial_account=%s" % _dial_account)
+                _ = upgrade(session, bandwidth)
                 logger.info('Upgrade done: Down %dM, Up %dM', _['bandwidth']['downstream'], _['bandwidth']['upstream'])
                 i = 0
             else:
@@ -427,7 +481,7 @@ def fast_d1ck(uname, pwd, login_type,
                     logger.error('renew_xunlei failed')
                     i = 100
                     continue
-                _ = api('keepalive', session.user_id, session.session_id)
+                _ = heartbeat(session)
 
             logger.debug('%s', _)
         except APIError as e:
