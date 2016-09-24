@@ -10,7 +10,7 @@ import sys
 from swjsq._compat import text_type
 from swjsq.core import fast_d1ck, setup
 from swjsq.core import TYPE_NORMAL_ACCOUNT, TYPE_NUM_ACCOUNT
-from swjsq.exceptions import APIError, LoginError
+from swjsq.exceptions import APIError, LoginError, UpgradeError
 
 
 class NoCredentialsError(RuntimeError):
@@ -170,6 +170,8 @@ def main():
     except APIError as e:
         logging.error('API Error %s: (%d) %s',
                       e.command, e.errno, e.message or 'Unknown')
+    except UpgradeError as e:
+        logging.error('Upgrade Error: %s', e.message)
     except KeyboardInterrupt:
         logging.info('Stopping')
 

@@ -16,7 +16,7 @@ from swjsq._compat import PY3
 from swjsq._compat import binary_type, text_type
 from swjsq._compat import iterbytes, iteritems, range
 from swjsq._compat import parse, request, URLError
-from swjsq.exceptions import APIError, LoginError, SWJSQError
+from swjsq.exceptions import APIError, LoginError, SWJSQError, UpgradeError
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +202,10 @@ class Session(object):
         if self.raw.get(u'payId') in [5, 702]:
             return True
         return False
+
+    @property
+    def is_subaccount(self):
+        return self.raw.get('isSubAccount', False)
 
 
 class Bandwidth(object):
@@ -433,12 +437,11 @@ def heartbeat(session):
 
 def fast_d1ck(uname, pwd, login_type,
               account_file_encrypted, account_file_plain, save=True):
-    if uname[-2] == ':':
-        logger.error('sub account can not upgrade')
-        os._exit(3)
-
     session = login_xunlei(uname, pwd, login_type)
-    logger.info('Login xunlei succeeded')
+    logger.info(u'Login xunlei succeeded')
+
+    if session.is_subaccount:
+        raise UpgradeError(u'Subaccount cannot upgrade')
 
     if not session.can_upgrade:
         logger.warn(u'You are probably not Xunlei VIP')
