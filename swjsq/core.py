@@ -15,7 +15,7 @@ import atexit
 from swjsq._compat import PY3
 from swjsq._compat import binary_type, text_type
 from swjsq._compat import iterbytes, iteritems, range
-from swjsq._compat import request, URLError
+from swjsq._compat import parse, request, URLError
 from swjsq.exceptions import APIError, LoginError, SWJSQError
 
 logger = logging.getLogger(__name__)
@@ -138,15 +138,21 @@ def get_mac(nic='', to_splt=':'):
     return FALLBACK_MAC
 
 
-def http_req(url, headers=None, body=None, max_tries=3):
+def http_req(url, params=None, body=None, headers=None, max_tries=3):
     '''Get result of HTTP request
     :param url: URL of the target
-    :param headers: optional request headers as dict
+    :param params: optional query string as dict
     :param body: optional request body as binary type or ascii text
+    :param headers: optional request headers as dict
     :param max_tries: total count of failed tries before raising error
     :returns: body of the response as binary type
     :raises URLError: request failed even after retries
     '''
+    if params:
+        query_string = parse.urlencode(params)
+        delimiter = u'&' if u'?' in url else u'?'
+        url = '{}{}{}'.format(url, delimiter, query_string)
+
     req = request.Request(url)
     for k, v in iteritems(headers or {}):
         req.add_header(k, v)
@@ -168,10 +174,11 @@ def http_req(url, headers=None, body=None, max_tries=3):
     return resp.read()
 
 
-def json_http_req(url, headers=None, body=None, max_tries=3, encoding=None):
+def json_http_req(url, params=None, body=None, headers=None,
+                  max_tries=3, encoding=None):
     encoding = encoding or u'utf-8'
 
-    response = http_req(url, headers, body, max_tries)
+    response = http_req(url, params, body, headers, max_tries)
 
     return json.loads(response.decode(encoding))
 
@@ -361,20 +368,23 @@ def setup():
     logger.debug(u'API_URL: %s', API_URL)
 
 
-def api(cmd, uid, session_id='', extras=''):
+def api(cmd, uid, session_id='', extras=None):
     # missing dial_account, (userid), os
-    url = 'http://%s/v2/%s?%sclient_type=android-swjsq-%s&peerid=%s&time_and=%d&client_version=androidswjsq-%s&userid=%s&os=android-5.0.1.23SmallRice%s' % (
-            API_URL,
-            cmd,
-            ('sessionid=%s&' % session_id) if session_id else '',
-            APP_VERSION,
-            PEER_ID,
-            time.time() * 1000,
-            APP_VERSION,
-            uid,
-            ('&%s' % extras) if extras else '',
-    )
-    response = json_http_req(url, headers=header_api)
+    params = {
+        u'client_type': u'android-swjsq-{}'.format(APP_VERSION),
+        u'peerid': PEER_ID,
+        u'time_and': time.time() * 1000,
+        u'client_version': u'androidswjsq-{}'.format(APP_VERSION),
+        u'userid': uid,
+        u'os': u'android-5.0.1.23SmallRice',
+    }
+    if session_id:
+        params[u'sessionid'] = session_id
+    if extras:
+        params.update(extras)
+
+    url = u'http://{}/v2/{}'.format(API_URL, cmd)
+    response = json_http_req(url, params=params, headers=header_api)
 
     errno = response.get('errno')
     if errno:
@@ -401,13 +411,18 @@ def get_bandwidth(session):
 
 
 def upgrade(session, bandwidth):
-    extras = u'user_type=1&dial_account={}'.format(bandwidth.dial_account)
+    extras = {
+        u'user_type': 1,
+        u'dial_account': bandwidth.dial_account,
+    }
     return api(u'upgrade',
                session.user_id, session.session_id, extras=extras)
 
 
 def recover(session, bandwidth):
-    extras = u'dial_account={}'.format(bandwidth.dial_account)
+    extras = {
+        u'dial_account': bandwidth.dial_account,
+    }
     return api(u'recover',
                session.user_id, session.session_id, extras=extras)
 

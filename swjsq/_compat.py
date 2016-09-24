@@ -20,7 +20,9 @@ if PY2:
     import __builtin__
     range = __builtin__.xrange
 
+    import urllib
     import urllib2
+    parse = urllib
     request = urllib2
     URLError = urllib2.URLError
 else:
@@ -35,7 +37,9 @@ else:
     import builtins
     range = builtins.range
 
-    import urllib.request
     import urllib.error
+    import urllib.parse
+    import urllib.request
+    parse = urllib.parse
     request = urllib.request
     URLError = urllib.error.URLError
