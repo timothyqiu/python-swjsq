@@ -11,19 +11,30 @@ python-swjsq 是基于 `Xunlei-FastDick <https://github.com/fffonion/Xunlei-Fast
 * Pythonic
 
 
-========
-快速入门
-========
+====
+安装
+====
 
-* 安装：``pip install swjsq``
-* 新建 ``swjsq.account.txt``，填入 ``用户名,密码`` ，如 ``ahaha,123456`` （英文逗号），并保存
-* 在含有上述文件的目录下执行 ``swjsq``
+python-swjsq 使用 pip 安装：
+
+.. code-block:: bash
+
+    pip install swjsq
 
 
 ====
-说明
+使用
 ====
 
-* 明文存储的密码将会在第一次登陆成功后保存为数字ID和密码的MD5，明文文件将会删除。如果需要更换账号，只需新建一个 ``swjsq.account.txt`` ，并重新运行python脚本
-* 会员权限及月加速流量等详见 `这里 <http://swjsq.xunlei.com>`_
-* 自带 `这里抄的 <https://github.com/mengskysama/XunLeiCrystalMinesMakeDie/blob/master/run.py>`_ 纯python实现RSA加密，可选安装pycrypto加快(首次)运算速度
+用以下两种方法之一提供登录凭据：
+
+1. 新建 ``swjsq.account.txt`` 文件，将内容填写为 ``用户名,密码`` 即可。
+2. 设置环境变量 ``XUNLEI_UID`` 为用户名，``XUNLEI_PASSWD`` 为密码。
+
+使用时只需运行：
+
+.. code-block:: bash
+
+    swjsq
+
+首次登陆成功后， ``swjsq.account.txt`` 将被删除，加密后的用户名密码将被保存至 ``.swjsq.account`` 文件中。
