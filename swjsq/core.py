@@ -435,24 +435,12 @@ def heartbeat(session):
     return api(u'keepalive', session.user_id, session.session_id)
 
 
-def fast_d1ck(uname, pwd, login_type,
-              account_file_encrypted, account_file_plain, save=True):
-    session = login_xunlei(uname, pwd, login_type)
-    logger.info(u'Login xunlei succeeded')
-
+def fast_d1ck(session, password_hash):
     if session.is_subaccount:
         raise UpgradeError(u'Subaccount cannot upgrade')
 
     if not session.can_upgrade:
         logger.warn(u'You are probably not Xunlei VIP')
-
-    if save:
-        try:
-            os.remove(account_file_plain)
-        except Exception:
-            pass
-        with open(account_file_encrypted, 'w') as f:
-            f.write('%s,%s' % (session.user_id, pwd))
 
     bandwidth = get_bandwidth(session)
     if not bandwidth.can_upgrade:
@@ -477,7 +465,8 @@ def fast_d1ck(uname, pwd, login_type,
             # i=100 login, i:=36
             if i == 100:
                 try:
-                    new_session = login_xunlei(uname, pwd, login_type)
+                    new_session = login_xunlei(session.user_id, password_hash,
+                                               TYPE_NUM_ACCOUNT)
                 except SWJSQError:
                     logger.error('login_xunlei failed')
                 else:

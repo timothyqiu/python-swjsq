@@ -8,7 +8,7 @@ import os
 import sys
 
 from swjsq._compat import text_type
-from swjsq.core import fast_d1ck, setup
+from swjsq.core import fast_d1ck, login_xunlei, setup
 from swjsq.core import TYPE_NORMAL_ACCOUNT, TYPE_NUM_ACCOUNT
 from swjsq.exceptions import APIError, LoginError, UpgradeError
 
@@ -148,20 +148,31 @@ def main():
         # Logging
         setup_logging()
 
-        # Load credentials
-        credentials = load_credentials(args.account_file_plain,
-                                       args.account_file_encrypted)
-
         # Setup global state
         setup()
 
-        # Routine
+        # Login
+        credentials = load_credentials(args.account_file_plain,
+                                       args.account_file_encrypted)
+
+        session = login_xunlei(credentials.uid, credentials.password_hash,
+                               credentials.login_type)
+        logging.info('Login xunlei succeeded.')
+
+        # Save encrypted credentials
         save_encrypted = (credentials.login_type != TYPE_NUM_ACCOUNT)
-        fast_d1ck(credentials.uid, credentials.password_hash,
-                  credentials.login_type,
-                  save=save_encrypted,
-                  account_file_encrypted=args.account_file_encrypted,
-                  account_file_plain=args.account_file_plain)
+        if save_encrypted:
+            try:
+                os.remove(args.account_file_plain)
+            except Exception:
+                pass
+            content = '{},{}'.format(session.user_id,
+                                     credentials.password_hash)
+            with open(args.account_file_encrypted, 'w') as f:
+                f.write(content)
+
+        # Routine
+        fast_d1ck(session, credentials.password_hash)
     except NoCredentialsError:
         logging.error('No credentials provided.')
     except LoginError as e:
