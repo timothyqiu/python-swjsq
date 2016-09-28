@@ -90,7 +90,7 @@ def load_credentials_from_file(path, skip_password_hash=False):
     if not skip_password_hash:
         pwd = hashlib.md5(pwd).hexdigest()
     # return type of hexdigest is different between PY2 and PY3
-    if pwd is text_type:
+    if isinstance(pwd, text_type):
         pwd = pwd.encode('utf-8')
     return uid, pwd
 
@@ -100,13 +100,13 @@ def load_credentials_from_env():
     if not uid or not pwd:
         raise RuntimeError('Environment variables not set')
     # type of environment variable is different between PY2 and PY3
-    if uid is text_type:
+    if isinstance(uid, text_type):
         uid = uid.encode(sys.getfilesystemencoding())
-    if pwd is text_type:
+    if isinstance(pwd, text_type):
         pwd = pwd.encode(sys.getfilesystemencoding())
     pwd = hashlib.md5(pwd).hexdigest()
     # return type of hexdigest is different between PY2 and PY3
-    if pwd is text_type:
+    if isinstance(pwd, text_type):
         pwd = pwd.encode('utf-8')
     return uid, pwd
 
