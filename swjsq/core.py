@@ -320,18 +320,17 @@ def setup():
     logger.debug(u'API_URL: %s', API_URL)
 
 
-def api(cmd, uid, session_id='', extras=None):
-    # missing dial_account, (userid), os
+def api(cmd, session, extras=None):
+    # for 'bandwidth' command, `userid` and `sessionid` are not mandatory
     params = {
         u'client_type': u'android-swjsq-{}'.format(APP_VERSION),
         u'peerid': PEER_ID,
         u'time_and': time.time() * 1000,
         u'client_version': u'androidswjsq-{}'.format(APP_VERSION),
-        u'userid': uid,
+        u'userid': session.user_id,
+        u'sessionid': session.session_id,
         u'os': u'android-5.0.1.23SmallRice',
     }
-    if session_id:
-        params[u'sessionid'] = session_id
     if extras:
         params.update(extras)
 
@@ -349,7 +348,7 @@ def api(cmd, uid, session_id='', extras=None):
 
 
 def get_bandwidth(session):
-    response = api('bandwidth', session.user_id)
+    response = api('bandwidth', session)
     bandwidth = Bandwidth(response)
 
     KB_PER_MB = 1024
@@ -367,20 +366,18 @@ def upgrade(session, bandwidth):
         u'user_type': 1,
         u'dial_account': bandwidth.dial_account,
     }
-    return api(u'upgrade',
-               session.user_id, session.session_id, extras=extras)
+    return api(u'upgrade', session, extras=extras)
 
 
 def recover(session, bandwidth):
     extras = {
         u'dial_account': bandwidth.dial_account,
     }
-    return api(u'recover',
-               session.user_id, session.session_id, extras=extras)
+    return api(u'recover', session, extras=extras)
 
 
 def heartbeat(session):
-    return api(u'keepalive', session.user_id, session.session_id)
+    return api(u'keepalive', session)
 
 
 def fast_d1ck(session, password_hash):
