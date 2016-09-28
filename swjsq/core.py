@@ -8,15 +8,15 @@ import re
 import json
 import time
 import hashlib
-import binascii
 import ssl
 import atexit
 
 from swjsq._compat import PY3
-from swjsq._compat import binary_type, text_type
-from swjsq._compat import iterbytes, iteritems, range
+from swjsq._compat import text_type
+from swjsq._compat import iteritems, range
 from swjsq._compat import parse, request, URLError
 from swjsq.exceptions import APIError, LoginError, SWJSQError, UpgradeError
+from swjsq.rsa import rsa_encrypt
 
 logger = logging.getLogger(__name__)
 
@@ -37,58 +37,6 @@ XUNLEI_LOGIN_URL = u'https://login.mobile.reg2t.sandai.net:443/'
 
 if not PY3:
     rsa_pubexp = long(rsa_pubexp)
-
-
-try:
-    from Crypto.PublicKey import RSA
-except ImportError:
-    # slow rsa
-    logger.warn('pycrypto not found, using pure-python implemention')
-    rsa_result = {}
-
-    def cached(func):
-        def _(s):
-            if s in rsa_result:
-                _r = rsa_result[s]
-            else:
-                _r = func(s)
-                rsa_result[s] = _r
-            return _r
-        return _
-
-    # https://github.com/mengskysama/XunLeiCrystalMinesMakeDie/blob/master/run.py
-    def modpow(b, e, m):
-        result = 1
-        while (e > 0):
-            if e & 1:
-                result = (result * b) % m
-            e = e >> 1
-            b = (b * b) % m
-        return result
-
-    def binary_to_int(binary):
-        str_int = 0
-        for c in iterbytes(binary):
-            str_int = str_int << 8
-            str_int += c
-        return str_int
-
-    @cached
-    def rsa_encode(payload):
-        if not isinstance(payload, binary_type):
-            raise TypeError(u'payload should be of binary type')
-        result = modpow(binary_to_int(payload), rsa_pubexp, rsa_mod)
-        return u'{0:0256X}'.format(result)  # length should be 1024bit, hard coded here
-else:
-    cipher = RSA.construct((rsa_mod, rsa_pubexp))
-
-    def rsa_encode(payload):
-        if not isinstance(payload, binary_type):
-            raise TypeError(u'payload should be of binary type')
-        _ = binascii.hexlify(cipher.encrypt(payload, None)[0]).upper()
-        if PY3:
-            _ = _.decode("utf-8")
-        return _
 
 
 TYPE_NORMAL_ACCOUNT = 0
@@ -269,7 +217,7 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
         u'isCompressed': 0,
         u'cmdID': 1,
         u'userName': uname.decode('utf-8'),
-        u'passWord': rsa_encode(pwd_md5),
+        u'passWord': rsa_encrypt(rsa_pubexp, rsa_mod, pwd_md5),
         u'loginType': login_type,
         u'sessionID': u'',
         u'verifyKey': verify_key,
