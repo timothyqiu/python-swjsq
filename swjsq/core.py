@@ -96,7 +96,7 @@ def http_req(url, params=None, body=None, headers=None, max_tries=3):
     if params:
         query_string = parse.urlencode(params)
         delimiter = u'&' if u'?' in url else u'?'
-        url = '{}{}{}'.format(url, delimiter, query_string)
+        url = '{0}{1}{2}'.format(url, delimiter, query_string)
 
     req = request.Request(url)
     for k, v in iteritems(headers or {}):
@@ -230,8 +230,8 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
         u'verifyCode': verify_code,
         u'appName': u'ANDROID-com.xunlei.vip.swjsq',
         u'rsaKey': {
-            u'e': u'{:06X}'.format(rsa_pubexp),
-            u'n': u'{:0256X}'.format(rsa_mod),
+            u'e': u'{0:06X}'.format(rsa_pubexp),
+            u'n': u'{0:0256X}'.format(rsa_mod),
         },
         u'extensionList': u'',
     })
@@ -314,7 +314,7 @@ def api_url():
         logger.warn(u'queryportal format error: %s', e)
         return FALLBACK_INTERFACE
 
-    return u'{}:{}'.format(ip, port)
+    return u'{0}:{1}'.format(ip, port)
 
 
 def setup():
@@ -329,10 +329,10 @@ def setup():
 def api(cmd, session, extras=None):
     # for 'bandwidth' command, `userid` and `sessionid` are not mandatory
     params = {
-        u'client_type': u'android-swjsq-{}'.format(APP_VERSION),
+        u'client_type': u'android-swjsq-{0}'.format(APP_VERSION),
         u'peerid': PEER_ID,
         u'time_and': time.time() * 1000,
-        u'client_version': u'androidswjsq-{}'.format(APP_VERSION),
+        u'client_version': u'androidswjsq-{0}'.format(APP_VERSION),
         u'userid': session.user_id,
         u'sessionid': session.session_id,
         u'os': u'android-5.0.1.23SmallRice',
@@ -340,7 +340,7 @@ def api(cmd, session, extras=None):
     if extras:
         params.update(extras)
 
-    url = u'http://{}/v2/{}'.format(API_URL, cmd)
+    url = u'http://{0}/v2/{1}'.format(API_URL, cmd)
     response = json_http_req(url, params=params, headers=header_api)
 
     errno = response.get('errno')

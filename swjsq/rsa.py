@@ -72,4 +72,4 @@ def _rsa_encrypt_python(pubexp, mod, payload):
         return str_int
 
     cipher = modpow(binary_to_int(payload), pubexp, mod)
-    return '{:0256X}'.format(cipher)
+    return '{0:0256X}'.format(cipher)

@@ -28,11 +28,11 @@ def show_usage():
         ('-h, --help', 'show this help message and exit'),
     ]
 
-    print('usage: {} [OPTIONS]'.format(sys.argv[0]))
+    print('usage: {0} [OPTIONS]'.format(sys.argv[0]))
     print()
     print('options:')
     for opt, description in options:
-        print('  {}\t{}'.format(opt, description))
+        print('  {0}\t{1}'.format(opt, description))
 
 
 def parse_args():
@@ -166,8 +166,8 @@ def main():
                 os.remove(args.account_file_plain)
             except Exception:
                 pass
-            content = '{},{}'.format(session.user_id,
-                                     credentials.password_hash)
+            content = '{0},{1}'.format(session.user_id,
+                                       credentials.password_hash)
             with open(args.account_file_encrypted, 'w') as f:
                 f.write(content)
 
