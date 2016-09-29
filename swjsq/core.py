@@ -9,6 +9,7 @@ import json
 import time
 import hashlib
 import ssl
+import sys
 import atexit
 
 from swjsq._compat import PY3
@@ -20,10 +21,6 @@ from swjsq.rsa import rsa_encrypt
 
 logger = logging.getLogger(__name__)
 
-
-# xunlei use self-signed certificate; on py2.7.9+
-if hasattr(ssl, '_create_unverified_context') and hasattr(ssl, '_create_default_https_context'):
-    ssl._create_default_https_context = ssl._create_unverified_context
 
 rsa_mod = 0xAC69F5CCC8BDE47CD3D371603748378C9CFAD2938A6B021E0E191013975AD683F5CBF9ADE8BD7D46B4D2EC2D78AF146F1DD2D50DC51446BB8880B8CE88D476694DFC60594393BEEFAA16F5DBCEBE22F89D640F5336E42F587DC4AFEDEFEAC36CF007009CCCE5C1ACB4FF06FBA69802A8085C2C54BADD0597FC83E6870F1E36FD
 rsa_pubexp = 0x010001
@@ -107,10 +104,19 @@ def http_req(url, params=None, body=None, headers=None, max_tries=3):
     if isinstance(body, text_type):
         body = body.encode(u'ascii')
 
+    # Xunlei uses a self-signed certificate
+    # which would be rejected by default in Python 2.7.9+
+    extra_options = {}
+    if sys.version_info >= (2, 7, 9):
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        extra_options['context'] = context
+
     sleep_increment = 2
     for i in range(1, max_tries + 1):
         try:
-            resp = request.urlopen(req, data=body)
+            resp = request.urlopen(req, data=body, **extra_options)
         except URLError as e:
             logger.debug(u'#%d request failed: %s', i, e)
             if i == max_tries:
