@@ -12,7 +12,6 @@ import ssl
 import sys
 import atexit
 
-from swjsq._compat import PY3
 from swjsq._compat import text_type
 from swjsq._compat import iteritems, range
 from swjsq._compat import parse, request, URLError
@@ -22,8 +21,8 @@ from swjsq.rsa import rsa_encrypt
 logger = logging.getLogger(__name__)
 
 
-rsa_mod = 0xAC69F5CCC8BDE47CD3D371603748378C9CFAD2938A6B021E0E191013975AD683F5CBF9ADE8BD7D46B4D2EC2D78AF146F1DD2D50DC51446BB8880B8CE88D476694DFC60594393BEEFAA16F5DBCEBE22F89D640F5336E42F587DC4AFEDEFEAC36CF007009CCCE5C1ACB4FF06FBA69802A8085C2C54BADD0597FC83E6870F1E36FD
-rsa_pubexp = 0x010001
+rsa_mod = u'AC69F5CCC8BDE47CD3D371603748378C9CFAD2938A6B021E0E191013975AD683F5CBF9ADE8BD7D46B4D2EC2D78AF146F1DD2D50DC51446BB8880B8CE88D476694DFC60594393BEEFAA16F5DBCEBE22F89D640F5336E42F587DC4AFEDEFEAC36CF007009CCCE5C1ACB4FF06FBA69802A8085C2C54BADD0597FC83E6870F1E36FD'
+rsa_pubexp = u'010001'
 
 BUSINESS_TYPE = 68  # Constant. Probably for SWJSQ
 APP_VERSION = "2.0.3.4"
@@ -31,10 +30,6 @@ PROTOCOL_VERSION = 108
 FALLBACK_MAC = '000000000000'
 FALLBACK_INTERFACE = u'119.147.41.210:80'
 XUNLEI_LOGIN_URL = u'https://login.mobile.reg2t.sandai.net:443/'
-
-if not PY3:
-    rsa_pubexp = long(rsa_pubexp)
-
 
 TYPE_NORMAL_ACCOUNT = 0
 TYPE_NUM_ACCOUNT = 1
@@ -230,8 +225,8 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
         u'verifyCode': verify_code,
         u'appName': u'ANDROID-com.xunlei.vip.swjsq',
         u'rsaKey': {
-            u'e': u'{0:06X}'.format(rsa_pubexp),
-            u'n': u'{0:0256X}'.format(rsa_mod),
+            u'e': rsa_pubexp,
+            u'n': rsa_mod,
         },
         u'extensionList': u'',
     })

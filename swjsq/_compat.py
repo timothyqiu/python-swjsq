@@ -9,7 +9,9 @@ PY2 = sys.version_info[0] == 2
 PY3 = sys.version_info[0] == 3
 
 if PY2:
-    text_type = unicode
+    import __builtin__
+
+    text_type = __builtin__.unicode
     binary_type = str
 
     iterbytes = functools.partial(itertools.imap, ord)
@@ -17,8 +19,8 @@ if PY2:
     def iteritems(d, **kwargs):
         return d.iteritems(**kwargs)
 
-    import __builtin__
     range = __builtin__.xrange
+    long = __builtin__.long
 
     import urllib
     import urllib2
@@ -26,6 +28,8 @@ if PY2:
     request = urllib2
     URLError = urllib2.URLError
 else:
+    import builtins
+
     text_type = str
     binary_type = bytes
 
@@ -34,8 +38,8 @@ else:
     def iteritems(d, **kwargs):
         return d.items(**kwargs)
 
-    import builtins
     range = builtins.range
+    long = builtins.int
 
     import urllib.error
     import urllib.parse

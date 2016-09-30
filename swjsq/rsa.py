@@ -5,7 +5,7 @@ import binascii
 import functools
 import logging
 
-from swjsq._compat import binary_type, iterbytes
+from swjsq._compat import long, binary_type, iterbytes
 
 
 logger = logging.getLogger(__name__)
@@ -30,12 +30,17 @@ def _cache_recent(f):
 @_cache_recent
 def rsa_encrypt(pubexp, mod, payload):
     '''RSA encrypt
+    :param pubexp: RSA pubexp as hex string
+    :param mod: RSA mod as hex string
     :param payload: binary data to be encrypted
     :returns: cipher as hex string
     :raises TypeError: if payload is not binary type
     '''
     if not isinstance(payload, binary_type):
         raise TypeError('payload should be of binary type')
+
+    pubexp = long(pubexp, 16)
+    mod = long(mod, 16)
 
     try:
         return _rsa_encrypt_pgcrypto(pubexp, mod, payload)
