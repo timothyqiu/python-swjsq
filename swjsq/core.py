@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-from __future__ import print_function
 
 import collections
 import logging
@@ -8,14 +7,11 @@ import re
 import json
 import time
 import hashlib
-import ssl
-import sys
 import atexit
 
-from swjsq._compat import text_type
-from swjsq._compat import iteritems, range
-from swjsq._compat import parse, request, URLError
+from swjsq._compat import URLError
 from swjsq.exceptions import APIError, LoginError, SWJSQError, UpgradeError
+from swjsq.http import get as http_get
 from swjsq.rsa import rsa_encrypt
 
 logger = logging.getLogger(__name__)
@@ -78,56 +74,11 @@ def get_mac(nic='', to_splt=':'):
     return FALLBACK_MAC
 
 
-def http_req(url, params=None, body=None, headers=None, max_tries=3):
-    '''Get result of HTTP request
-    :param url: URL of the target
-    :param params: optional query string as dict
-    :param body: optional request body as binary type or ascii text
-    :param headers: optional request headers as dict
-    :param max_tries: total count of failed tries before raising error
-    :returns: body of the response as binary type
-    :raises URLError: request failed even after retries
-    '''
-    if params:
-        query_string = parse.urlencode(params)
-        delimiter = u'&' if u'?' in url else u'?'
-        url = '{0}{1}{2}'.format(url, delimiter, query_string)
-
-    req = request.Request(url)
-    for k, v in iteritems(headers or {}):
-        req.add_header(k, v)
-    if isinstance(body, text_type):
-        body = body.encode(u'ascii')
-
-    # Xunlei uses a self-signed certificate
-    # which would be rejected by default in Python 2.7.9+
-    extra_options = {}
-    if sys.version_info >= (2, 7, 9):
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        extra_options['context'] = context
-
-    sleep_increment = 2
-    for i in range(1, max_tries + 1):
-        try:
-            resp = request.urlopen(req, data=body, **extra_options)
-        except URLError as e:
-            logger.debug(u'#%d request failed: %s', i, e)
-            if i == max_tries:
-                raise
-            time.sleep(i * sleep_increment)
-        else:
-            break
-
-    return resp.read()
-
-
 def json_http_req(url, params=None, body=None, headers=None,
                   max_tries=3, encoding=None):
     encoding = encoding or u'utf-8'
 
-    response = http_req(url, params, body, headers, max_tries)
+    response = http_get(url, params, body, headers, max_tries)
 
     return json.loads(response.decode(encoding))
 
