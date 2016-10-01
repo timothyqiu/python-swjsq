@@ -367,7 +367,11 @@ def upgrade(session, bandwidth):
         u'user_type': 1,
         u'dial_account': bandwidth.dial_account,
     }
-    return api(u'upgrade', session, extras=extras)
+    response = api(u'upgrade', session, extras=extras)
+    logger.info('Upgrade done: Down %dM, Up %dM',
+                response['bandwidth']['downstream'],
+                response['bandwidth']['upstream'])
+    return response
 
 
 def recover(session, bandwidth):
@@ -391,7 +395,7 @@ def fast_d1ck(session, password_hash):
     bandwidth = get_bandwidth(session)
     if not bandwidth.can_upgrade:
         logger.error(u'Does not support upgrading.')
-        os._exit(3)
+        raise UpgradeError(u'Bandwidth cannot upgrade')
 
     def _atexit_func():
         logger.info(u'Sending recover request')
@@ -425,7 +429,6 @@ def fast_d1ck(session, password_hash):
                     recover(session, bandwidth)
                     time.sleep(5)
                 _ = upgrade(session, bandwidth)
-                logger.info('Upgrade done: Down %dM, Up %dM', _['bandwidth']['downstream'], _['bandwidth']['upstream'])
                 i = 0
             else:
                 try:
@@ -446,7 +449,7 @@ def fast_d1ck(session, password_hash):
                 logger.info('Already upgraded, continuing')
                 i = 0
             else:
-                time.sleep(300)  # os._exit(4)
+                time.sleep(300)
         except Exception:
             logger.exception('Unexpected')
 
