@@ -1,31 +1,24 @@
 from __future__ import absolute_import
-from __future__ import print_function
 
+import collections
 import logging
 import os
 import re
 import json
 import time
 import hashlib
-import binascii
-import ssl
 import atexit
 
-from swjsq._compat import PY3
-from swjsq._compat import binary_type, text_type
-from swjsq._compat import iterbytes, iteritems, range
-from swjsq._compat import request, URLError
-from swjsq.exceptions import APIError, LoginError, SWJSQError
+from swjsq._compat import URLError
+from swjsq.exceptions import APIError, LoginError, SWJSQError, UpgradeError
+from swjsq.http import get as http_get
+from swjsq.rsa import rsa_encrypt
 
 logger = logging.getLogger(__name__)
 
 
-# xunlei use self-signed certificate; on py2.7.9+
-if hasattr(ssl, '_create_unverified_context') and hasattr(ssl, '_create_default_https_context'):
-    ssl._create_default_https_context = ssl._create_unverified_context
-
-rsa_mod = 0xAC69F5CCC8BDE47CD3D371603748378C9CFAD2938A6B021E0E191013975AD683F5CBF9ADE8BD7D46B4D2EC2D78AF146F1DD2D50DC51446BB8880B8CE88D476694DFC60594393BEEFAA16F5DBCEBE22F89D640F5336E42F587DC4AFEDEFEAC36CF007009CCCE5C1ACB4FF06FBA69802A8085C2C54BADD0597FC83E6870F1E36FD
-rsa_pubexp = 0x010001
+rsa_mod = u'AC69F5CCC8BDE47CD3D371603748378C9CFAD2938A6B021E0E191013975AD683F5CBF9ADE8BD7D46B4D2EC2D78AF146F1DD2D50DC51446BB8880B8CE88D476694DFC60594393BEEFAA16F5DBCEBE22F89D640F5336E42F587DC4AFEDEFEAC36CF007009CCCE5C1ACB4FF06FBA69802A8085C2C54BADD0597FC83E6870F1E36FD'
+rsa_pubexp = u'010001'
 
 BUSINESS_TYPE = 68  # Constant. Probably for SWJSQ
 APP_VERSION = "2.0.3.4"
@@ -33,62 +26,6 @@ PROTOCOL_VERSION = 108
 FALLBACK_MAC = '000000000000'
 FALLBACK_INTERFACE = u'119.147.41.210:80'
 XUNLEI_LOGIN_URL = u'https://login.mobile.reg2t.sandai.net:443/'
-
-if not PY3:
-    rsa_pubexp = long(rsa_pubexp)
-
-
-try:
-    from Crypto.PublicKey import RSA
-except ImportError:
-    # slow rsa
-    logger.warn('pycrypto not found, using pure-python implemention')
-    rsa_result = {}
-
-    def cached(func):
-        def _(s):
-            if s in rsa_result:
-                _r = rsa_result[s]
-            else:
-                _r = func(s)
-                rsa_result[s] = _r
-            return _r
-        return _
-
-    # https://github.com/mengskysama/XunLeiCrystalMinesMakeDie/blob/master/run.py
-    def modpow(b, e, m):
-        result = 1
-        while (e > 0):
-            if e & 1:
-                result = (result * b) % m
-            e = e >> 1
-            b = (b * b) % m
-        return result
-
-    def binary_to_int(binary):
-        str_int = 0
-        for c in iterbytes(binary):
-            str_int = str_int << 8
-            str_int += c
-        return str_int
-
-    @cached
-    def rsa_encode(payload):
-        if not isinstance(payload, binary_type):
-            raise TypeError(u'payload should be of binary type')
-        result = modpow(binary_to_int(payload), rsa_pubexp, rsa_mod)
-        return u'{0:0256X}'.format(result)  # length should be 1024bit, hard coded here
-else:
-    cipher = RSA.construct((rsa_mod, rsa_pubexp))
-
-    def rsa_encode(payload):
-        if not isinstance(payload, binary_type):
-            raise TypeError(u'payload should be of binary type')
-        _ = binascii.hexlify(cipher.encrypt(payload, None)[0]).upper()
-        if PY3:
-            _ = _.decode("utf-8")
-        return _
-
 
 TYPE_NORMAL_ACCOUNT = 0
 TYPE_NUM_ACCOUNT = 1
@@ -132,45 +69,16 @@ def get_mac(nic='', to_splt=':'):
                 return FALLBACK_MAC
             else:
                 return _[0].replace(splt, to_splt)
-    except:
+    except Exception:
         pass
     return FALLBACK_MAC
 
 
-def http_req(url, headers=None, body=None, max_tries=3):
-    '''Get result of HTTP request
-    :param url: URL of the target
-    :param headers: optional request headers as dict
-    :param body: optional request body as binary type or ascii text
-    :param max_tries: total count of failed tries before raising error
-    :returns: body of the response as binary type
-    :raises URLError: request failed even after retries
-    '''
-    req = request.Request(url)
-    for k, v in iteritems(headers or {}):
-        req.add_header(k, v)
-    if isinstance(body, text_type):
-        body = body.encode(u'ascii')
-
-    sleep_increment = 2
-    for i in range(1, max_tries + 1):
-        try:
-            resp = request.urlopen(req, data=body)
-        except URLError as e:
-            logger.debug(u'#%d request failed: %s', i, e)
-            if i == max_tries:
-                raise
-            time.sleep(i * sleep_increment)
-        else:
-            break
-
-    return resp.read()
-
-
-def json_http_req(url, headers=None, body=None, max_tries=3, encoding=None):
+def json_http_req(url, params=None, body=None, headers=None,
+                  max_tries=3, encoding=None):
     encoding = encoding or u'utf-8'
 
-    response = http_req(url, headers, body, max_tries)
+    response = http_get(url, params, body, headers, max_tries)
 
     return json.loads(response.decode(encoding))
 
@@ -194,6 +102,44 @@ class Session(object):
         if self.raw.get(u'payId') in [5, 702]:
             return True
         return False
+
+    @property
+    def is_subaccount(self):
+        return self.raw.get('isSubAccount', False)
+
+
+class Bandwidth(object):
+    BandwidthDetail = collections.namedtuple(u'BandwidthDetail',
+                                             u'upstream downstream')
+
+    def __init__(self, response):
+        self.raw = response
+
+    @property
+    def can_upgrade(self):
+        return self.raw.get(u'can_upgrade', False)
+
+    @property
+    def dial_account(self):
+        return self.raw.get(u'dial_account')
+
+    @property
+    def original(self):
+        detail = self.raw[u'bandwidth']  # FIXME: what if no such field?
+        return self.BandwidthDetail(detail[u'upstream'], detail[u'downstream'])
+
+    @property
+    def max(self):
+        detail = self.raw[u'max_bandwidth']  # FIXME: what if no such field?
+        return self.BandwidthDetail(detail[u'upstream'], detail[u'downstream'])
+
+    @property
+    def province_name(self):
+        return self.raw.get(u'province_name')
+
+    @property
+    def sp_name(self):
+        return self.raw.get(u'sp_name')
 
 
 def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
@@ -223,15 +169,15 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
         u'isCompressed': 0,
         u'cmdID': 1,
         u'userName': uname.decode('utf-8'),
-        u'passWord': rsa_encode(pwd_md5),
+        u'passWord': rsa_encrypt(rsa_pubexp, rsa_mod, pwd_md5),
         u'loginType': login_type,
         u'sessionID': u'',
         u'verifyKey': verify_key,
         u'verifyCode': verify_code,
         u'appName': u'ANDROID-com.xunlei.vip.swjsq',
         u'rsaKey': {
-            u'e': u'{:06X}'.format(rsa_pubexp),
-            u'n': u'{:0256X}'.format(rsa_mod),
+            u'e': rsa_pubexp,
+            u'n': rsa_mod,
         },
         u'extensionList': u'',
     })
@@ -314,7 +260,7 @@ def api_url():
         logger.warn(u'queryportal format error: %s', e)
         return FALLBACK_INTERFACE
 
-    return u'{}:{}'.format(ip, port)
+    return u'{0}:{1}'.format(ip, port)
 
 
 def setup():
@@ -326,20 +272,22 @@ def setup():
     logger.debug(u'API_URL: %s', API_URL)
 
 
-def api(cmd, uid, session_id='', extras=''):
-    # missing dial_account, (userid), os
-    url = 'http://%s/v2/%s?%sclient_type=android-swjsq-%s&peerid=%s&time_and=%d&client_version=androidswjsq-%s&userid=%s&os=android-5.0.1.23SmallRice%s' % (
-            API_URL,
-            cmd,
-            ('sessionid=%s&' % session_id) if session_id else '',
-            APP_VERSION,
-            PEER_ID,
-            time.time() * 1000,
-            APP_VERSION,
-            uid,
-            ('&%s' % extras) if extras else '',
-    )
-    response = json_http_req(url, headers=header_api)
+def api(cmd, session, extras=None):
+    # for 'bandwidth' command, `userid` and `sessionid` are not mandatory
+    params = {
+        u'client_type': u'android-swjsq-{0}'.format(APP_VERSION),
+        u'peerid': PEER_ID,
+        u'time_and': time.time() * 1000,
+        u'client_version': u'androidswjsq-{0}'.format(APP_VERSION),
+        u'userid': session.user_id,
+        u'sessionid': session.session_id,
+        u'os': u'android-5.0.1.23SmallRice',
+    }
+    if extras:
+        params.update(extras)
+
+    url = u'http://{0}/v2/{1}'.format(API_URL, cmd)
+    response = json_http_req(url, params=params, headers=header_api)
 
     errno = response.get('errno')
     if errno:
@@ -351,50 +299,63 @@ def api(cmd, uid, session_id='', extras=''):
     return response
 
 
-def fast_d1ck(uname, pwd, login_type,
-              account_file_encrypted, account_file_plain, save=True):
-    if uname[-2] == ':':
-        logger.error('sub account can not upgrade')
-        os._exit(3)
+def get_bandwidth(session):
+    response = api('bandwidth', session)
+    bandwidth = Bandwidth(response)
 
-    session = login_xunlei(uname, pwd, login_type)
-    logger.info('Login xunlei succeeded')
+    KB_PER_MB = 1024
+    logger.info('To Upgrade: %s%s Down %dM -> %dM, Up %dM -> %dM',
+                bandwidth.province_name, bandwidth.sp_name,
+                bandwidth.original.downstream / KB_PER_MB,
+                bandwidth.max.downstream / KB_PER_MB,
+                bandwidth.original.upstream / KB_PER_MB,
+                bandwidth.max.upstream / KB_PER_MB)
+    return bandwidth
+
+
+def upgrade(session, bandwidth):
+    extras = {
+        u'user_type': 1,
+        u'dial_account': bandwidth.dial_account,
+    }
+    response = api(u'upgrade', session, extras=extras)
+    logger.info('Upgrade done: Down %dM, Up %dM',
+                response['bandwidth']['downstream'],
+                response['bandwidth']['upstream'])
+    return response
+
+
+def recover(session, bandwidth):
+    extras = {
+        u'dial_account': bandwidth.dial_account,
+    }
+    return api(u'recover', session, extras=extras)
+
+
+def heartbeat(session):
+    return api(u'keepalive', session)
+
+
+def fast_d1ck(session, password_hash):
+    if session.is_subaccount:
+        raise UpgradeError(u'Subaccount cannot upgrade')
 
     if not session.can_upgrade:
         logger.warn(u'You are probably not Xunlei VIP')
 
-    if save:
-        try:
-            os.remove(account_file_plain)
-        except:
-            pass
-        with open(account_file_encrypted, 'w') as f:
-            f.write('%s,%s' % (session.user_id, pwd))
-
-    _ = api('bandwidth', session.user_id)
-    if not _['can_upgrade']:
-        logger.error('can not upgrade, so sad TAT %s', _['message'])
-        os._exit(3)
-
-    _dial_account = _['dial_account']
-
-    logger.info(
-        'To Upgrade: %s%s Down %dM -> %dM, Up %dM -> %dM',
-        _['province_name'], _['sp_name'],
-        _['bandwidth']['downstream']/1024,
-        _['max_bandwidth']['downstream']/1024,
-        _['bandwidth']['upstream']/1024,
-        _['max_bandwidth']['upstream']/1024,
-    )
+    bandwidth = get_bandwidth(session)
+    if not bandwidth.can_upgrade:
+        logger.error(u'Does not support upgrading.')
+        raise UpgradeError(u'Bandwidth cannot upgrade')
 
     def _atexit_func():
-        logger.info("Sending recover request")
+        logger.info(u'Sending recover request')
         try:
-            api('recover', session.user_id, session.session_id, extras="dial_account=%s" % _dial_account)
+            recover(session, bandwidth)
         except KeyboardInterrupt:
-            logger.info('Secondary ctrl+c pressed, exiting')
+            logger.info(u'Secondary ctrl+c pressed, exiting')
         else:
-            logger.info("Recover done. exiting")
+            logger.info(u'Recover done. exiting')
 
     atexit.register(_atexit_func)
     i = 0
@@ -405,7 +366,8 @@ def fast_d1ck(uname, pwd, login_type,
             # i=100 login, i:=36
             if i == 100:
                 try:
-                    new_session = login_xunlei(uname, pwd, login_type)
+                    new_session = login_xunlei(session.user_id, password_hash,
+                                               TYPE_NUM_ACCOUNT)
                 except SWJSQError:
                     logger.error('login_xunlei failed')
                 else:
@@ -415,10 +377,9 @@ def fast_d1ck(uname, pwd, login_type,
             if i % 18 == 0:  # 3h
                 logger.info('Initializing upgrade')
                 if i:  # not first time
-                    api('recover', session.user_id, session.session_id, extras="dial_account=%s" % _dial_account)
+                    recover(session, bandwidth)
                     time.sleep(5)
-                _ = api('upgrade', session.user_id, session.session_id, extras="user_type=1&dial_account=%s" % _dial_account)
-                logger.info('Upgrade done: Down %dM, Up %dM', _['bandwidth']['downstream'], _['bandwidth']['upstream'])
+                _ = upgrade(session, bandwidth)
                 i = 0
             else:
                 try:
@@ -427,7 +388,7 @@ def fast_d1ck(uname, pwd, login_type,
                     logger.error('renew_xunlei failed')
                     i = 100
                     continue
-                _ = api('keepalive', session.user_id, session.session_id)
+                _ = heartbeat(session)
 
             logger.debug('%s', _)
         except APIError as e:
@@ -439,7 +400,7 @@ def fast_d1ck(uname, pwd, login_type,
                 logger.info('Already upgraded, continuing')
                 i = 0
             else:
-                time.sleep(300)  # os._exit(4)
+                time.sleep(300)
         except Exception:
             logger.exception('Unexpected')
 

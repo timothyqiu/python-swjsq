@@ -13,3 +13,8 @@ class LoginError(SWJSQError):
     def __init__(self, errno, message):
         self.errno = errno
         self.message = message
+
+
+class UpgradeError(SWJSQError):
+    def __init__(self, message):
+        self.message = message

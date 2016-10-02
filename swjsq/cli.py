@@ -8,9 +8,9 @@ import os
 import sys
 
 from swjsq._compat import text_type
-from swjsq.core import fast_d1ck, setup
+from swjsq.core import fast_d1ck, login_xunlei, setup
 from swjsq.core import TYPE_NORMAL_ACCOUNT, TYPE_NUM_ACCOUNT
-from swjsq.exceptions import APIError, LoginError
+from swjsq.exceptions import APIError, LoginError, UpgradeError
 
 
 class NoCredentialsError(RuntimeError):
@@ -28,11 +28,11 @@ def show_usage():
         ('-h, --help', 'show this help message and exit'),
     ]
 
-    print('usage: {} [OPTIONS]'.format(sys.argv[0]))
+    print('usage: {0} [OPTIONS]'.format(sys.argv[0]))
     print()
     print('options:')
     for opt, description in options:
-        print('  {}\t{}'.format(opt, description))
+        print('  {0}\t{1}'.format(opt, description))
 
 
 def parse_args():
@@ -90,7 +90,7 @@ def load_credentials_from_file(path, skip_password_hash=False):
     if not skip_password_hash:
         pwd = hashlib.md5(pwd).hexdigest()
     # return type of hexdigest is different between PY2 and PY3
-    if pwd is text_type:
+    if isinstance(pwd, text_type):
         pwd = pwd.encode('utf-8')
     return uid, pwd
 
@@ -100,13 +100,13 @@ def load_credentials_from_env():
     if not uid or not pwd:
         raise RuntimeError('Environment variables not set')
     # type of environment variable is different between PY2 and PY3
-    if uid is text_type:
+    if isinstance(uid, text_type):
         uid = uid.encode(sys.getfilesystemencoding())
-    if pwd is text_type:
+    if isinstance(pwd, text_type):
         pwd = pwd.encode(sys.getfilesystemencoding())
     pwd = hashlib.md5(pwd).hexdigest()
     # return type of hexdigest is different between PY2 and PY3
-    if pwd is text_type:
+    if isinstance(pwd, text_type):
         pwd = pwd.encode('utf-8')
     return uid, pwd
 
@@ -148,20 +148,31 @@ def main():
         # Logging
         setup_logging()
 
-        # Load credentials
-        credentials = load_credentials(args.account_file_plain,
-                                       args.account_file_encrypted)
-
         # Setup global state
         setup()
 
-        # Routine
+        # Login
+        credentials = load_credentials(args.account_file_plain,
+                                       args.account_file_encrypted)
+
+        session = login_xunlei(credentials.uid, credentials.password_hash,
+                               credentials.login_type)
+        logging.info('Login xunlei succeeded.')
+
+        # Save encrypted credentials
         save_encrypted = (credentials.login_type != TYPE_NUM_ACCOUNT)
-        fast_d1ck(credentials.uid, credentials.password_hash,
-                  credentials.login_type,
-                  save=save_encrypted,
-                  account_file_encrypted=args.account_file_encrypted,
-                  account_file_plain=args.account_file_plain)
+        if save_encrypted:
+            try:
+                os.remove(args.account_file_plain)
+            except Exception:
+                pass
+            content = '{0},{1}'.format(session.user_id,
+                                       credentials.password_hash)
+            with open(args.account_file_encrypted, 'w') as f:
+                f.write(content)
+
+        # Routine
+        fast_d1ck(session, credentials.password_hash)
     except NoCredentialsError:
         logging.error('No credentials provided.')
     except LoginError as e:
@@ -170,6 +181,8 @@ def main():
     except APIError as e:
         logging.error('API Error %s: (%d) %s',
                       e.command, e.errno, e.message or 'Unknown')
+    except UpgradeError as e:
+        logging.error('Upgrade Error: %s', e.message)
     except KeyboardInterrupt:
         logging.info('Stopping')
 
