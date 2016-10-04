@@ -9,6 +9,7 @@ import time
 import hashlib
 import atexit
 
+from swjsq._compat import binary_type, text_type
 from swjsq._compat import URLError
 from swjsq.exceptions import APIError, LoginError, SWJSQError, UpgradeError
 from swjsq.http import get as http_get
@@ -157,6 +158,13 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
         ).hexdigest().encode('utf-8')
     ).hexdigest())
 
+    if isinstance(uname, binary_type):
+        username = uname.decode('utf-8')
+    elif not isinstance(uname, text_type):
+        username = text_type(uname)
+    else:
+        username = uname
+
     payload = json.dumps({
         u'protocolVersion': PROTOCOL_VERSION,  # 109
         u'sequenceNo': 1000001,
@@ -168,7 +176,7 @@ def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
         u'devicesign': device_sign,
         u'isCompressed': 0,
         u'cmdID': 1,
-        u'userName': uname.decode('utf-8'),
+        u'userName': username,
         u'passWord': rsa_encrypt(rsa_pubexp, rsa_mod, pwd_md5),
         u'loginType': login_type,
         u'sessionID': u'',
