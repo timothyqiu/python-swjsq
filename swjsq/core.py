@@ -2,8 +2,6 @@ from __future__ import absolute_import
 
 import collections
 import logging
-import os
-import re
 import json
 import time
 import hashlib
@@ -14,6 +12,7 @@ from swjsq._compat import URLError
 from swjsq.exceptions import APIError, LoginError, SWJSQError, UpgradeError
 from swjsq.http import get as http_get
 from swjsq.rsa import rsa_encrypt
+from swjsq.utils import get_mac
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ rsa_pubexp = u'010001'
 BUSINESS_TYPE = 68  # Constant. Probably for SWJSQ
 APP_VERSION = "2.0.3.4"
 PROTOCOL_VERSION = 108
-FALLBACK_MAC = '000000000000'
+FALLBACK_MAC = '00:00:00:00:00:00'
 FALLBACK_INTERFACE = u'119.147.41.210:80'
 XUNLEI_LOGIN_URL = u'https://login.mobile.reg2t.sandai.net:443/'
 
@@ -43,36 +42,6 @@ header_api = {
     'Accept-Encoding': 'gzip',
     'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 5.0.1; SmallRice Build/LRX22C)'
 }
-
-
-def get_mac(nic='', to_splt=':'):
-    if os.name == 'nt':
-        cmd = 'ipconfig /all'
-        splt = '-'
-    elif os.name == "posix":
-        if os.path.exists('/usr/bin/ip') or os.path.exists('/bin/ip'):
-            if nic:
-                cmd = 'ip link show dev %s' % nic
-            else:
-                # Unfortunately, loopback interface always comes first
-                # So we have to grep it out
-                cmd = 'ip link show up | grep -v loopback'
-        else:
-            cmd = 'ifconfig %s' % (nic or '-a')
-        splt = ':'
-    else:
-        return FALLBACK_MAC
-    try:
-        r = os.popen(cmd).read()
-        if r:
-            _ = re.findall('((?:[0-9A-Fa-f]{2}%s){5}[0-9A-Fa-f]{2})' % splt, r)
-            if not _:
-                return FALLBACK_MAC
-            else:
-                return _[0].replace(splt, to_splt)
-    except Exception:
-        pass
-    return FALLBACK_MAC
 
 
 def json_http_req(url, params=None, body=None, headers=None,
@@ -274,7 +243,10 @@ def api_url():
 def setup():
     global PEER_ID
     global API_URL
-    PEER_ID = get_mac(to_splt='').upper() + '004V'
+
+    mac = get_mac() or FALLBACK_MAC
+    PEER_ID = mac.replace(':', '').upper() + '004V'
+
     API_URL = api_url()
 
     logger.debug(u'API_URL: %s', API_URL)
