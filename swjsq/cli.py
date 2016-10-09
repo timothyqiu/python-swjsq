@@ -140,6 +140,14 @@ def load_credentials(account_file_plain, account_file_encrypted):
         raise NoCredentialsError()
 
 
+def save_credentials(account_file_encrypted,
+                     session, credentials):
+    content = '{0},{1}'.format(session.user_id,
+                               credentials.password_hash)
+    with open(account_file_encrypted, 'w') as f:
+        f.write(content)
+
+
 def main():
     try:
         # Arguments
@@ -160,16 +168,12 @@ def main():
         logging.info('Login xunlei succeeded.')
 
         # Save encrypted credentials
-        save_encrypted = (credentials.login_type != TYPE_NUM_ACCOUNT)
-        if save_encrypted:
+        if credentials.login_type != TYPE_NUM_ACCOUNT:
             try:
                 os.remove(args.account_file_plain)
             except Exception:
                 pass
-            content = '{0},{1}'.format(session.user_id,
-                                       credentials.password_hash)
-            with open(args.account_file_encrypted, 'w') as f:
-                f.write(content)
+            save_credentials(args.account_file_encrypted, session, credentials)
 
         # Routine
         fast_d1ck(session, credentials.password_hash)
