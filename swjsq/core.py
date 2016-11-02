@@ -112,6 +112,105 @@ class Bandwidth(object):
         return self.raw.get(u'sp_name')
 
 
+class SWJSQClient(object):
+    def __init__(self, session):
+        self.session = session
+        self.api_url = self._get_api_url()
+
+        logger.debug(u'API URL: %s', self.api_url)
+
+    def _get_api_url(self):
+        # Try to connect to the first available query portal server
+        PORTAL_URLS = [
+            u'http://api.portal.swjsq.vip.xunlei.com:81/v2/queryportal',
+            u'http://api2.portal.swjsq.vip.xunlei.com:81/v2/queryportal',
+        ]
+        for url in PORTAL_URLS:
+            try:
+                portal = json_http_req(url, max_tries=1)
+            except URLError:
+                pass
+            else:
+                break
+        else:
+            logger.warn(u'queryportal failed: no portal server available')
+            return FALLBACK_INTERFACE
+
+        errno = portal.get(u'errno')
+        if errno != 0:
+            message = portal.get(u'message', u'Unknown')
+            logger.warn(u'queryportal failed: (%d) %s', errno, message)
+            return FALLBACK_INTERFACE
+
+        try:
+            ip = portal[u'interface_ip']
+            port = portal[u'interface_port']
+        except KeyError as e:
+            logger.warn(u'queryportal format error: %s', e)
+            return FALLBACK_INTERFACE
+
+        return u'{0}:{1}'.format(ip, port)
+
+    def _execute(self, cmd, extras=None):
+        # for 'bandwidth' command, `userid` and `sessionid` are not mandatory
+        params = {
+            u'client_type': u'android-swjsq-{0}'.format(APP_VERSION),
+            u'peerid': PEER_ID,
+            u'time_and': time.time() * 1000,
+            u'client_version': u'androidswjsq-{0}'.format(APP_VERSION),
+            u'userid': self.session.user_id,
+            u'sessionid': self.session.session_id,
+            u'os': u'android-5.0.1.23SmallRice',
+        }
+        if extras:
+            params.update(extras)
+
+        url = u'http://{0}/v2/{1}'.format(self.api_url, cmd)
+        response = json_http_req(url, params=params, headers=header_api)
+
+        errno = response.get('errno')
+        if errno:
+            message = response.get('richmessage')
+            if not message:
+                message = response.get('message')
+            raise APIError(cmd, errno, message)
+
+        return response
+
+    def get_bandwidth(self):
+        response = self._execute(u'bandwidth')
+        bandwidth = Bandwidth(response)
+
+        KB_PER_MB = 1024
+        logger.info(u'To Upgrade: %s%s Down %dM -> %dM, Up %dM -> %dM',
+                    bandwidth.province_name, bandwidth.sp_name,
+                    bandwidth.original.downstream / KB_PER_MB,
+                    bandwidth.max.downstream / KB_PER_MB,
+                    bandwidth.original.upstream / KB_PER_MB,
+                    bandwidth.max.upstream / KB_PER_MB)
+        return bandwidth
+
+    def upgrade(self, bandwidth):
+        extras = {
+            u'user_type': 1,
+            u'dial_account': bandwidth.dial_account,
+        }
+        response = self._execute(u'upgrade', extras=extras)
+        logger.info(u'Upgrade done: Down %dM, Up %dM',
+                    response[u'bandwidth'][u'downstream'],
+                    response[u'bandwidth'][u'upstream'])
+        return response
+
+    def recover(self, bandwidth):
+        extras = {
+            u'dial_account': bandwidth.dial_account,
+        }
+        return self._execute(u'recover', extras=extras)
+
+    def heartbeat(self):
+        return self._execute(u'keepalive')
+
+
 def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
                  verify_key=None, verify_code=None):
     verify_key = verify_key or u''
@@ -204,116 +303,11 @@ def renew_xunlei(session):
     return response
 
 
-def portal_http_req():
-    # Try to connect to the first available query portal server
-    PORTAL_URLS = [
-        u'http://api.portal.swjsq.vip.xunlei.com:81/v2/queryportal',
-        u'http://api2.portal.swjsq.vip.xunlei.com:81/v2/queryportal',
-    ]
-    for url in PORTAL_URLS:
-        try:
-            return json_http_req(url, max_tries=1)
-        except URLError:
-            pass
-    return None
-
-
-def api_url():
-    portal = portal_http_req()
-    if not portal:
-        logger.warn(u'queryportal failed: no portal server available')
-        return FALLBACK_INTERFACE
-
-    errno = portal.get(u'errno')
-    if errno != 0:
-        message = portal.get(u'message', u'Unknown')
-        logger.warn(u'queryportal failed: (%d) %s', errno, message)
-        return FALLBACK_INTERFACE
-
-    try:
-        ip = portal[u'interface_ip']
-        port = portal[u'interface_port']
-    except KeyError as e:
-        logger.warn(u'queryportal format error: %s', e)
-        return FALLBACK_INTERFACE
-
-    return u'{0}:{1}'.format(ip, port)
-
-
 def setup():
     global PEER_ID
-    global API_URL
 
     mac = get_mac() or FALLBACK_MAC
     PEER_ID = mac.replace(':', '').upper() + '004V'
-
-    API_URL = api_url()
-
-    logger.debug(u'API_URL: %s', API_URL)
-
-
-def api(cmd, session, extras=None):
-    # for 'bandwidth' command, `userid` and `sessionid` are not mandatory
-    params = {
-        u'client_type': u'android-swjsq-{0}'.format(APP_VERSION),
-        u'peerid': PEER_ID,
-        u'time_and': time.time() * 1000,
-        u'client_version': u'androidswjsq-{0}'.format(APP_VERSION),
-        u'userid': session.user_id,
-        u'sessionid': session.session_id,
-        u'os': u'android-5.0.1.23SmallRice',
-    }
-    if extras:
-        params.update(extras)
-
-    url = u'http://{0}/v2/{1}'.format(API_URL, cmd)
-    response = json_http_req(url, params=params, headers=header_api)
-
-    errno = response.get('errno')
-    if errno:
-        message = response.get('richmessage')
-        if not message:
-            message = response.get('message')
-        raise APIError(cmd, errno, message)
-
-    return response
-
-
-def get_bandwidth(session):
-    response = api('bandwidth', session)
-    bandwidth = Bandwidth(response)
-
-    KB_PER_MB = 1024
-    logger.info('To Upgrade: %s%s Down %dM -> %dM, Up %dM -> %dM',
-                bandwidth.province_name, bandwidth.sp_name,
-                bandwidth.original.downstream / KB_PER_MB,
-                bandwidth.max.downstream / KB_PER_MB,
-                bandwidth.original.upstream / KB_PER_MB,
-                bandwidth.max.upstream / KB_PER_MB)
-    return bandwidth
-
-
-def upgrade(session, bandwidth):
-    extras = {
-        u'user_type': 1,
-        u'dial_account': bandwidth.dial_account,
-    }
-    response = api(u'upgrade', session, extras=extras)
-    logger.info('Upgrade done: Down %dM, Up %dM',
-                response['bandwidth']['downstream'],
-                response['bandwidth']['upstream'])
-    return response
-
-
-def recover(session, bandwidth):
-    extras = {
-        u'dial_account': bandwidth.dial_account,
-    }
-    return api(u'recover', session, extras=extras)
-
-
-def heartbeat(session):
-    return api(u'keepalive', session)
 
 
 def fast_d1ck(session, password_hash):
@@ -323,7 +317,9 @@ def fast_d1ck(session, password_hash):
     if not session.can_upgrade:
         logger.warn(u'You are probably not Xunlei VIP')
 
-    bandwidth = get_bandwidth(session)
+    client = SWJSQClient(session)
+
+    bandwidth = client.get_bandwidth()
     if not bandwidth.can_upgrade:
         logger.error(u'Does not support upgrading.')
         raise UpgradeError(u'Bandwidth cannot upgrade')
@@ -331,7 +327,7 @@ def fast_d1ck(session, password_hash):
     def _atexit_func():
         logger.info(u'Sending recover request')
         try:
-            recover(session, bandwidth)
+            client.recover(bandwidth)
         except KeyboardInterrupt:
             logger.info(u'Secondary ctrl+c pressed, exiting')
         else:
@@ -346,29 +342,30 @@ def fast_d1ck(session, password_hash):
             # i=100 login, i:=36
             if i == 100:
                 try:
-                    new_session = login_xunlei(session.user_id, password_hash,
+                    new_session = login_xunlei(client.session.user_id,
+                                               password_hash,
                                                TYPE_NUM_ACCOUNT)
                 except SWJSQError:
                     logger.error('login_xunlei failed')
                 else:
-                    session = new_session
+                    client.session = new_session
                 i = 18
 
             if i % 18 == 0:  # 3h
                 logger.info('Initializing upgrade')
                 if i:  # not first time
-                    recover(session, bandwidth)
+                    client.recover(bandwidth)
                     time.sleep(5)
-                _ = upgrade(session, bandwidth)
+                _ = client.upgrade(bandwidth)
                 i = 0
             else:
                 try:
-                    renew_xunlei(session)
+                    renew_xunlei(client.session)
                 except SWJSQError:
                     logger.error('renew_xunlei failed')
                     i = 100
                     continue
-                _ = heartbeat(session)
+                _ = client.heartbeat()
 
             logger.debug('%s', _)
         except APIError as e:
