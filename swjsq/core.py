@@ -112,11 +112,118 @@ class Bandwidth(object):
         return self.raw.get(u'sp_name')
 
 
-class SWJSQClient(object):
-    def __init__(self, session):
-        self.session = session
-        self.api_url = self._get_api_url()
+class XunleiClient(object):
+    def __init__(self):
+        self.session = None
 
+    @property
+    def peer_id(self):
+        peer_id = getattr(self, '_peer_id', None)
+        if peer_id is None:
+            mac = get_mac() or FALLBACK_MAC
+            peer_id = mac.replace(':', '').upper() + '004V'
+            setattr(self, '_peer_id', peer_id)
+        return peer_id
+
+    def login(self, uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
+              verify_key=None, verify_code=None):
+        verify_key = verify_key or u''
+        verify_code = verify_code or u''
+
+        # just generate a 32-bit string
+        fake_device_id = hashlib.md5(("%s23333" % pwd_md5).encode('utf-8')).hexdigest()
+
+        # sign = div.10?.device_id + md5(sha1(packageName + businessType + md5(a protocolVersion specific GUID)))
+        device_sign = "div100.%s%s" % (fake_device_id, hashlib.md5(
+            hashlib.sha1(
+                ("%scom.xunlei.vip.swjsq68700d1872b772946a6940e4b51827e8af" % fake_device_id).encode('utf-8')
+            ).hexdigest().encode('utf-8')
+        ).hexdigest())
+
+        if isinstance(uname, binary_type):
+            username = uname.decode('utf-8')
+        elif not isinstance(uname, text_type):
+            username = text_type(uname)
+        else:
+            username = uname
+
+        payload = json.dumps({
+            u'protocolVersion': PROTOCOL_VERSION,  # 109
+            u'sequenceNo': 1000001,
+            u'platformVersion': 1,
+            u'sdkVersion': 177550,  # 177600
+            u'peerID': self.peer_id,
+            u'businessType': BUSINESS_TYPE,
+            u'clientVersion': APP_VERSION,
+            u'devicesign': device_sign,
+            u'isCompressed': 0,
+            u'cmdID': 1,
+            u'userName': username,
+            u'passWord': rsa_encrypt(rsa_pubexp, rsa_mod, pwd_md5),
+            u'loginType': login_type,
+            u'sessionID': u'',
+            u'verifyKey': verify_key,
+            u'verifyCode': verify_code,
+            u'appName': u'ANDROID-com.xunlei.vip.swjsq',
+            u'rsaKey': {
+                u'e': rsa_pubexp,
+                u'n': rsa_mod,
+            },
+            u'extensionList': u'',
+        })
+
+        # TODO: Verification code handling
+        # If "errorCode" is 6, "errorDescUrl" contains URL of the verification
+        # code image. Access the URL and we can get the image, and the
+        # "VERIFY_KEY" from cookie. Next time we send the login request, fill
+        # in the "verifyKey" and "verifyCode".
+        response = json_http_req(XUNLEI_LOGIN_URL, body=payload,
+                                 headers=header_xl, encoding=u'gbk')
+
+        code = response.get(u'errorCode')
+        if code != 0:
+            message = response.get(u'errorDesc')
+            logger.debug(u'Login failed: (%d) %s', code, message or 'Unknown')
+            raise LoginError(code, message)
+
+        logger.debug(u'isVip:%s payId:%s payName:%s',
+                     response.get(u'isVip'),
+                     response.get(u'payId'), response.get(u'payName'))
+
+        self.session = Session(response)
+
+        return self.session
+
+    def renew(self):
+        payload = json.dumps({
+            u'protocolVersion': PROTOCOL_VERSION,
+            u'sequenceNo': 1000000,
+            u'platformVersion': 1,
+            u'peerID': self.peer_id,
+            u'businessType': BUSINESS_TYPE,
+            u'clientVersion': APP_VERSION,
+            u'isCompressed': 0,
+            u'cmdID': 11,
+            u'userID': self.session.user_id,
+            u'sessionID': self.session.session_id,
+        })
+        response = json_http_req(XUNLEI_LOGIN_URL, body=payload,
+                                 headers=header_xl, encoding=u'gbk')
+
+        code = response.get(u'errorCode')
+        if code != 0:
+            message = response.get(u'errorDesc')
+            logger.debug(u'Renew failed: (%d) %s', code, message or u'Unknown')
+            raise LoginError(code, message)
+
+        return response
+
+
+class SWJSQClient(XunleiClient):
+    def __init__(self):
+        super(XunleiClient, self).__init__()
+
+        self.api_url = self._get_api_url()
         logger.debug(u'API URL: %s', self.api_url)
 
     def _get_api_url(self):
@@ -155,7 +262,7 @@ class SWJSQClient(object):
         # for 'bandwidth' command, `userid` and `sessionid` are not mandatory
         params = {
             u'client_type': u'android-swjsq-{0}'.format(APP_VERSION),
-            u'peerid': PEER_ID,
+            u'peerid': self.peer_id,
             u'time_and': time.time() * 1000,
             u'client_version': u'androidswjsq-{0}'.format(APP_VERSION),
             u'userid': self.session.user_id,
@@ -211,113 +318,12 @@ class SWJSQClient(object):
         return self._execute(u'keepalive')
 
 
-def login_xunlei(uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
-                 verify_key=None, verify_code=None):
-    verify_key = verify_key or u''
-    verify_code = verify_code or u''
-
-    # just generate a 32-bit string
-    fake_device_id = hashlib.md5(("%s23333" % pwd_md5).encode('utf-8')).hexdigest()
-
-    # sign = div.10?.device_id + md5(sha1(packageName + businessType + md5(a protocolVersion specific GUID)))
-    device_sign = "div100.%s%s" % (fake_device_id, hashlib.md5(
-        hashlib.sha1(
-            ("%scom.xunlei.vip.swjsq68700d1872b772946a6940e4b51827e8af" % fake_device_id).encode('utf-8')
-        ).hexdigest().encode('utf-8')
-    ).hexdigest())
-
-    if isinstance(uname, binary_type):
-        username = uname.decode('utf-8')
-    elif not isinstance(uname, text_type):
-        username = text_type(uname)
-    else:
-        username = uname
-
-    payload = json.dumps({
-        u'protocolVersion': PROTOCOL_VERSION,  # 109
-        u'sequenceNo': 1000001,
-        u'platformVersion': 1,
-        u'sdkVersion': 177550,  # 177600
-        u'peerID': PEER_ID,
-        u'businessType': BUSINESS_TYPE,
-        u'clientVersion': APP_VERSION,
-        u'devicesign': device_sign,
-        u'isCompressed': 0,
-        u'cmdID': 1,
-        u'userName': username,
-        u'passWord': rsa_encrypt(rsa_pubexp, rsa_mod, pwd_md5),
-        u'loginType': login_type,
-        u'sessionID': u'',
-        u'verifyKey': verify_key,
-        u'verifyCode': verify_code,
-        u'appName': u'ANDROID-com.xunlei.vip.swjsq',
-        u'rsaKey': {
-            u'e': rsa_pubexp,
-            u'n': rsa_mod,
-        },
-        u'extensionList': u'',
-    })
-
-    # TODO: Verification code handling
-    # If "errorCode" is 6, "errorDescUrl" contains URL of the verification
-    # code image. Access the URL and we can get the image, and the
-    # "VERIFY_KEY" from cookie. Next time we send the login request, fill in
-    # the "verifyKey" and "verifyCode".
-    response = json_http_req(XUNLEI_LOGIN_URL,
-                             body=payload, headers=header_xl, encoding=u'gbk')
-
-    code = response.get(u'errorCode')
-    if code != 0:
-        message = response.get(u'errorDesc')
-        logger.debug(u'Login failed: (%d) %s', code, message or 'Unknown')
-        raise LoginError(code, message)
-
-    logger.debug(u'isVip:%s payId:%s payName:%s',
-                 response.get(u'isVip'),
-                 response.get(u'payId'), response.get(u'payName'))
-    return Session(response)
-
-
-def renew_xunlei(session):
-    payload = json.dumps({
-        u'protocolVersion': PROTOCOL_VERSION,
-        u'sequenceNo': 1000000,
-        u'platformVersion': 1,
-        u'peerID': PEER_ID,
-        u'businessType': BUSINESS_TYPE,
-        u'clientVersion': APP_VERSION,
-        u'isCompressed': 0,
-        u'cmdID': 11,
-        u'userID': session.user_id,
-        u'sessionID': session.session_id,
-    })
-    response = json_http_req(XUNLEI_LOGIN_URL,
-                             body=payload, headers=header_xl, encoding=u'gbk')
-
-    code = response.get(u'errorCode')
-    if code != 0:
-        message = response.get(u'errorDesc')
-        logger.debug(u'Renew failed: (%d) %s', code, message or u'Unknown')
-        raise LoginError(code, message)
-
-    return response
-
-
-def setup():
-    global PEER_ID
-
-    mac = get_mac() or FALLBACK_MAC
-    PEER_ID = mac.replace(':', '').upper() + '004V'
-
-
-def fast_d1ck(session, password_hash):
-    if session.is_subaccount:
+def fast_d1ck(client, password_hash):
+    if client.session.is_subaccount:
         raise UpgradeError(u'Subaccount cannot upgrade')
 
-    if not session.can_upgrade:
+    if not client.session.can_upgrade:
         logger.warn(u'You are probably not Xunlei VIP')
-
-    client = SWJSQClient(session)
 
     bandwidth = client.get_bandwidth()
     if not bandwidth.can_upgrade:
@@ -342,13 +348,11 @@ def fast_d1ck(session, password_hash):
             # i=100 login, i:=36
             if i == 100:
                 try:
-                    new_session = login_xunlei(client.session.user_id,
-                                               password_hash,
-                                               TYPE_NUM_ACCOUNT)
+                    client.login(client.session.user_id,
+                                 password_hash,
+                                 TYPE_NUM_ACCOUNT)
                 except SWJSQError:
                     logger.error('login_xunlei failed')
-                else:
-                    client.session = new_session
                 i = 18
 
             if i % 18 == 0:  # 3h
@@ -360,7 +364,7 @@ def fast_d1ck(session, password_hash):
                 i = 0
             else:
                 try:
-                    renew_xunlei(client.session)
+                    client.renew()
                 except SWJSQError:
                     logger.error('renew_xunlei failed')
                     i = 100
