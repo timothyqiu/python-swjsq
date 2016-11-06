@@ -17,40 +17,15 @@ from swjsq.utils import get_mac
 logger = logging.getLogger(__name__)
 
 
-rsa_mod = u'AC69F5CCC8BDE47CD3D371603748378C9CFAD2938A6B021E0E191013975AD683F5CBF9ADE8BD7D46B4D2EC2D78AF146F1DD2D50DC51446BB8880B8CE88D476694DFC60594393BEEFAA16F5DBCEBE22F89D640F5336E42F587DC4AFEDEFEAC36CF007009CCCE5C1ACB4FF06FBA69802A8085C2C54BADD0597FC83E6870F1E36FD'
-rsa_pubexp = u'010001'
+RSA_MOD = u'AC69F5CCC8BDE47CD3D371603748378C9CFAD2938A6B021E0E191013975AD683F5CBF9ADE8BD7D46B4D2EC2D78AF146F1DD2D50DC51446BB8880B8CE88D476694DFC60594393BEEFAA16F5DBCEBE22F89D640F5336E42F587DC4AFEDEFEAC36CF007009CCCE5C1ACB4FF06FBA69802A8085C2C54BADD0597FC83E6870F1E36FD'
+RSA_PUBEXP = u'010001'
 
-BUSINESS_TYPE = 68  # Constant. Probably for SWJSQ
-APP_VERSION = "2.0.3.4"
 PROTOCOL_VERSION = 108
 FALLBACK_MAC = '00:00:00:00:00:00'
 FALLBACK_INTERFACE = u'119.147.41.210:80'
-XUNLEI_LOGIN_URL = u'https://login.mobile.reg2t.sandai.net:443/'
 
 TYPE_NORMAL_ACCOUNT = 0
 TYPE_NUM_ACCOUNT = 1
-
-header_xl = {
-    'Content-Type': '',
-    'Connection': 'Keep-Alive',
-    'Accept-Encoding': 'gzip',
-    'User-Agent': 'android-async-http/xl-acc-sdk/version-1.6.1.177600'
-}
-header_api = {
-    'Content-Type': '',
-    'Connection': 'Keep-Alive',
-    'Accept-Encoding': 'gzip',
-    'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 5.0.1; SmallRice Build/LRX22C)'
-}
-
-
-def json_http_req(url, params=None, body=None, headers=None,
-                  max_tries=3, encoding=None):
-    encoding = encoding or u'utf-8'
-
-    response = http_get(url, params, body, headers, max_tries)
-
-    return json.loads(response.decode(encoding))
 
 
 class Session(object):
@@ -113,8 +88,11 @@ class Bandwidth(object):
 
 
 class XunleiClient(object):
-    def __init__(self):
+    def __init__(self, business_type, client_version, rsa_key=None):
         self.session = None
+        self.business_type = business_type
+        self.client_version = client_version
+        self.rsa_pubexp, self.rsa_mod = rsa_key or (RSA_PUBEXP, RSA_MOD)
 
     @property
     def peer_id(self):
@@ -124,6 +102,25 @@ class XunleiClient(object):
             peer_id = mac.replace(':', '').upper() + '004V'
             setattr(self, '_peer_id', peer_id)
         return peer_id
+
+    def _json_http_req(self, url, params=None, body=None, headers=None,
+                       max_tries=3, encoding=None):
+        encoding = encoding or u'utf-8'
+        response = http_get(url, params, body, headers, max_tries)
+        return json.loads(response.decode(encoding))
+
+    def _xunlei_request(self, payload):
+        headers = {
+            u'Content-Type': u'',
+            u'Connection': u'Keep-Alive',
+            u'Accept-Encoding': u'gzip',
+            u'User-Agent': (
+                u'android-async-http/xl-acc-sdk/version-1.6.1.177600'
+            ),
+        }
+        url = u'https://login.mobile.reg2t.sandai.net:443/'
+        return self._json_http_req(url, body=payload,
+                                   headers=headers, encoding=u'gbk')
 
     def login(self, uname, pwd_md5, login_type=TYPE_NORMAL_ACCOUNT,
               verify_key=None, verify_code=None):
@@ -153,21 +150,21 @@ class XunleiClient(object):
             u'platformVersion': 1,
             u'sdkVersion': 177550,  # 177600
             u'peerID': self.peer_id,
-            u'businessType': BUSINESS_TYPE,
-            u'clientVersion': APP_VERSION,
+            u'businessType': self.business_type,
+            u'clientVersion': self.client_version,
             u'devicesign': device_sign,
             u'isCompressed': 0,
             u'cmdID': 1,
             u'userName': username,
-            u'passWord': rsa_encrypt(rsa_pubexp, rsa_mod, pwd_md5),
+            u'passWord': rsa_encrypt(self.rsa_pubexp, self.rsa_mod, pwd_md5),
             u'loginType': login_type,
             u'sessionID': u'',
             u'verifyKey': verify_key,
             u'verifyCode': verify_code,
             u'appName': u'ANDROID-com.xunlei.vip.swjsq',
             u'rsaKey': {
-                u'e': rsa_pubexp,
-                u'n': rsa_mod,
+                u'e': self.rsa_pubexp,
+                u'n': self.rsa_mod,
             },
             u'extensionList': u'',
         })
@@ -177,8 +174,7 @@ class XunleiClient(object):
         # code image. Access the URL and we can get the image, and the
         # "VERIFY_KEY" from cookie. Next time we send the login request, fill
         # in the "verifyKey" and "verifyCode".
-        response = json_http_req(XUNLEI_LOGIN_URL, body=payload,
-                                 headers=header_xl, encoding=u'gbk')
+        response = self._xunlei_request(payload)
 
         code = response.get(u'errorCode')
         if code != 0:
@@ -200,15 +196,14 @@ class XunleiClient(object):
             u'sequenceNo': 1000000,
             u'platformVersion': 1,
             u'peerID': self.peer_id,
-            u'businessType': BUSINESS_TYPE,
-            u'clientVersion': APP_VERSION,
+            u'businessType': self.business_type,
+            u'clientVersion': self.client_version,
             u'isCompressed': 0,
             u'cmdID': 11,
             u'userID': self.session.user_id,
             u'sessionID': self.session.session_id,
         })
-        response = json_http_req(XUNLEI_LOGIN_URL, body=payload,
-                                 headers=header_xl, encoding=u'gbk')
+        response = self._xunlei_request(payload)
 
         code = response.get(u'errorCode')
         if code != 0:
@@ -221,7 +216,9 @@ class XunleiClient(object):
 
 class SWJSQClient(XunleiClient):
     def __init__(self):
-        super(XunleiClient, self).__init__()
+        business_type = 68  # Constant. Probably for SWJSQ
+        client_version = "2.0.3.4"
+        super(SWJSQClient, self).__init__(business_type, client_version)
 
         self.api_url = self._get_api_url()
         logger.debug(u'API URL: %s', self.api_url)
@@ -234,7 +231,7 @@ class SWJSQClient(XunleiClient):
         ]
         for url in PORTAL_URLS:
             try:
-                portal = json_http_req(url, max_tries=1)
+                portal = self._json_http_req(url, max_tries=1)
             except URLError:
                 pass
             else:
@@ -261,10 +258,10 @@ class SWJSQClient(XunleiClient):
     def _execute(self, cmd, extras=None):
         # for 'bandwidth' command, `userid` and `sessionid` are not mandatory
         params = {
-            u'client_type': u'android-swjsq-{0}'.format(APP_VERSION),
+            u'client_type': u'android-swjsq-{0}'.format(self.client_version),
             u'peerid': self.peer_id,
             u'time_and': time.time() * 1000,
-            u'client_version': u'androidswjsq-{0}'.format(APP_VERSION),
+            u'client_version': u'androidswjsq-{0}'.format(self.client_version),
             u'userid': self.session.user_id,
             u'sessionid': self.session.session_id,
             u'os': u'android-5.0.1.23SmallRice',
@@ -273,7 +270,16 @@ class SWJSQClient(XunleiClient):
             params.update(extras)
 
         url = u'http://{0}/v2/{1}'.format(self.api_url, cmd)
-        response = json_http_req(url, params=params, headers=header_api)
+        headers = {
+            u'Content-Type': u'',
+            u'Connection': u'Keep-Alive',
+            u'Accept-Encoding': u'gzip',
+            u'User-Agent': (
+                u'Dalvik/2.1.0 '
+                u'(Linux; U; Android 5.0.1; SmallRice Build/LRX22C)'
+            ),
+        }
+        response = self._json_http_req(url, params=params, headers=headers)
 
         errno = response.get('errno')
         if errno:
