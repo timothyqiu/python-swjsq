@@ -8,7 +8,7 @@ import os
 import sys
 
 from swjsq._compat import text_type
-from swjsq.core import fast_d1ck, login_xunlei, setup
+from swjsq.core import SWJSQClient, fast_d1ck
 from swjsq.core import TYPE_NORMAL_ACCOUNT, TYPE_NUM_ACCOUNT
 from swjsq.exceptions import APIError, LoginError, UpgradeError
 
@@ -140,6 +140,14 @@ def load_credentials(account_file_plain, account_file_encrypted):
         raise NoCredentialsError()
 
 
+def save_credentials(account_file_encrypted,
+                     session, credentials):
+    content = '{0},{1}'.format(session.user_id,
+                               credentials.password_hash)
+    with open(account_file_encrypted, 'w') as f:
+        f.write(content)
+
+
 def main():
     try:
         # Arguments
@@ -148,31 +156,26 @@ def main():
         # Logging
         setup_logging()
 
-        # Setup global state
-        setup()
-
         # Login
         credentials = load_credentials(args.account_file_plain,
                                        args.account_file_encrypted)
 
-        session = login_xunlei(credentials.uid, credentials.password_hash,
-                               credentials.login_type)
+        client = SWJSQClient()
+        client.login(credentials.uid, credentials.password_hash,
+                     credentials.login_type)
         logging.info('Login xunlei succeeded.')
 
         # Save encrypted credentials
-        save_encrypted = (credentials.login_type != TYPE_NUM_ACCOUNT)
-        if save_encrypted:
+        if credentials.login_type != TYPE_NUM_ACCOUNT:
             try:
                 os.remove(args.account_file_plain)
             except Exception:
                 pass
-            content = '{0},{1}'.format(session.user_id,
-                                       credentials.password_hash)
-            with open(args.account_file_encrypted, 'w') as f:
-                f.write(content)
+            save_credentials(args.account_file_encrypted,
+                             client.session, credentials)
 
         # Routine
-        fast_d1ck(session, credentials.password_hash)
+        fast_d1ck(client, credentials.password_hash)
     except NoCredentialsError:
         logging.error('No credentials provided.')
     except LoginError as e:
