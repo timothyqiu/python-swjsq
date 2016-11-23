@@ -383,6 +383,9 @@ def fast_d1ck(client, password_hash):
             if e.errno == 513:  # not exist channel: re-upgrade
                 i = 100
                 continue
+            elif e.errno in (717, 718):  # account auth session failed
+                i = 100  # The App also asks to relogin
+                continue
             elif e.errno == 812:
                 logger.info('Already upgraded, continuing')
                 i = 0
