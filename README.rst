@@ -41,4 +41,4 @@ python-swjsq 使用 pip 安装：
 
     swjsq
 
-首次登录成功后， ``swjsq.account.txt`` 将被删除，加密后的用户名密码将被保存至 ``.swjsq.account`` 文件中。
+首次登录成功后， ``swjsq.account.txt`` 将被删除，加密后的密码将被保存至 ``.swjsq.account`` 文件中。
