@@ -128,7 +128,7 @@ def load_credentials(account_file_plain, account_file_encrypted):
     try:
         uid, pwd_md5 = load_credentials_from_file(account_file_encrypted,
                                                   skip_password_hash=True)
-        return Credentials(TYPE_NUM_ACCOUNT, uid, pwd_md5)
+        return Credentials(TYPE_NORMAL_ACCOUNT, uid, pwd_md5)
     except Exception as e:
         logging.debug('load_credentials_from_file encrypted: %s', e)
 
@@ -140,9 +140,8 @@ def load_credentials(account_file_plain, account_file_encrypted):
         raise NoCredentialsError()
 
 
-def save_credentials(account_file_encrypted,
-                     session, credentials):
-    content = '{0},{1}'.format(session.user_id,
+def save_credentials(account_file_encrypted, credentials):
+    content = '{0},{1}'.format(credentials.uid,
                                credentials.password_hash)
     with open(account_file_encrypted, 'w') as f:
         f.write(content)
@@ -171,8 +170,7 @@ def main():
                 os.remove(args.account_file_plain)
             except Exception:
                 pass
-            save_credentials(args.account_file_encrypted,
-                             client.session, credentials)
+            save_credentials(args.account_file_encrypted, credentials)
 
         # Routine
         fast_d1ck(client, credentials.password_hash)
