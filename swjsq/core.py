@@ -309,9 +309,22 @@ class SWJSQClient(XunleiClient):
             u'dial_account': bandwidth.dial_account,
         }
         response = self._execute(u'upgrade', extras=extras)
-        logger.info(u'Upgrade done: Down %dM, Up %dM',
-                    response[u'bandwidth'][u'downstream'],
-                    response[u'bandwidth'][u'upstream'])
+
+        bandwidth = response.get(u'bandwidth')
+        if bandwidth:
+            downstream = bandwidth.get(u'downstream')
+            upstream = bandwidth.get(u'upstream')
+        else:
+            logger.warn('No `bandwidth` field: %s', response)
+            downstream, upstream = None, None
+
+        def format_speed(speed):
+            if speed is None:
+                return '<UNKNOWN>'
+            return '{}M'.format(speed)
+
+        logger.info(u'Upgrade done: Down %s, Up %s',
+                    format_speed(downstream), format_speed(upstream))
         return response
 
     def recover(self, bandwidth):
