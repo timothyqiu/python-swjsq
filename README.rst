@@ -6,6 +6,9 @@ python-swjsq: 迅雷快鸟命令行客户端
    :target: https://pypi.python.org/pypi/swjsq/
    :alt: Latest Version
 
+
+⚠️ 由于我不再使用迅雷快鸟，本项目目前处于搁置状态。如果迅雷快鸟后续更新相关协议，可能就无法使用了。
+
 python-swjsq 是基于 `Xunlei-FastDick <https://github.com/fffonion/Xunlei-Fastdick>`_ 的迅雷快鸟命令行客户端。
 
 基于原版，以以下这些为目标，希望做到更好：
